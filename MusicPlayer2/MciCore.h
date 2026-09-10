@@ -17,11 +17,11 @@ public:
 
     virtual void InitCore() override;
     virtual void UnInitCore() override;
-    virtual unsigned int GetHandle() override;
 
     virtual std::wstring GetAudioType() override;
     virtual int GetChannels() override;
     virtual int GetFReq() override;
+    virtual int GetBitrate() override;
     virtual std::wstring GetSoundFontName() override;
 
     virtual void Open(const wchar_t* file_path) override;
@@ -31,13 +31,15 @@ public:
     virtual void Stop() override;
     virtual void SetVolume(int volume) override;
     virtual void SetSpeed(float speed) override;
+    virtual void SetPitch(int pitch) override;
+    virtual bool IsSpeedAvailable() override;
+    virtual bool IsPitchAvailable() override;
     virtual bool SongIsOver() override;
 
     virtual int GetCurPosition() override;
     virtual int GetSongLength() override;
     virtual void SetCurPosition(int position) override;
-    virtual void GetAudioInfo(SongInfo& song_info, int flag = AF_LENGTH | AF_BITRATE | AF_TAG_INFO) override;
-    virtual void GetAudioInfo(const wchar_t* file_path, SongInfo& song_info, int flag = AF_LENGTH | AF_BITRATE | AF_TAG_INFO) override;
+    virtual void GetAudioInfo(const wchar_t* file_path, AudioInfo* audio_info, AudioTag* audio_tag) override;
 
     virtual bool IsMidi() override;
     virtual bool IsMidiConnotPlay() override;
@@ -49,14 +51,18 @@ public:
     virtual void ApplyEqualizer(int channel, int gain) override;
     virtual void SetReverb(int mix, int time) override;
     virtual void ClearReverb() override;
-    virtual void GetFFTData(float fft_data[128]) override;
+    virtual void GetFFTData(float fft_data[FFT_SAMPLE]) override;
 
     virtual int GetErrorCode() override;
     virtual std::wstring GetErrorInfo(int error_code) override;
     virtual std::wstring GetErrorInfo() override;
 
     virtual PlayerCoreType GetCoreType() override { return PT_MCI; }
-    virtual int GetDeviceCount() override;
+
+    virtual bool EncodeAudio(const std::wstring& src_file_path, const wstring& dest_file_path, EncodeFormat encode_format, void* encode_para, int dest_freq, EncodeAudioProc proc, int start_pos = 0, int end_pos = 0) override;
+    virtual bool InitEncoder() override;
+    virtual void UnInitEncoder() override;
+    virtual bool IsFreqConvertAvailable() override;
 
 private:
     void GetMidiPosition();

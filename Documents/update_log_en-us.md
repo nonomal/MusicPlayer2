@@ -1,6 +1,234 @@
-**[简体中文](./update_log.md) | English**<br>
+**[简体中文](./update_log.md) | English**
 
 # MusicPlayer2 Update log
+
+## V2.78 (2025/12/27)
+
+**New Features:**
+- When using the BASS kernel, implemented changing playback speed without pitch shifting. Added pitch shifting functionality to "Play Settings".
+- Added list search functionality to the Find dialog.
+- Added a "Remember last playback position" option in "Play Settings," allowing tracks to play from the beginning when switching lists #834.
+- Added support for using QQ Music as a download service, with corresponding options in General Settings.
+- Added right-click menu to the album cover download dialog.
+- Added duration display to the search list in the album cover download/Get tag information online dialog.
+- Added Traditional Chinese language support.
+- Added call stack information to crash message dialog.
+- In Options Settings, the "Lyrics folder", "Album cover folder", and "Default background image" edit boxes now allow manual path input.
+- Added an option in Options Settings → Media Library to merge different versions of the same song in the Now Playing list.
+- Added a "Remove top border of title bar" option in Options Settings → Appearance Settings to resolve the issue of a white border at the top of the window title bar.
+- When using GDI+ to draw album covers, if rounded corners are enabled, album covers are also clipped to rounded corners.
+- Added playback speed and pitch shifting display to the status bar.
+- Added mini spectrum visualization before the currently playing track in the playlist UI.
+- Adjusted the background color in Dark Mode when "Enable background" is unchecked.
+- In rename and format convert function, check the length of the target file path. If the path is too long, truncate the filename. Artist field to use the original name instead of the first artist #792.
+- Minimum UI refresh interval adjusted to 2 milliseconds.
+- Added the "Opening a single audio file in command line" option in Playback Settings to set the default behavior when opening a single file in command line.
+- When downloading lyrics to the lyric folder, use the "Artist-Title" format for naming.
+- Added an option in Options Settings → Playback Settings to disable screen sleep during full-screen playback #868.
+- Added a dialog asking whether to minimize to the notification area when closing the main window.
+
+**Customizable UI:**
+
+- Added folder browsing element `medialibFolderExplore`.
+- Added search box element `searchBox`.
+- In UI1, UI2, and UI6, when "Use system standard title bar" is checked, the style of the top-right buttons reverts to the previous effect, no longer occupying an entire row.
+- Optimized the layout of UI2.
+- Changed the style of "CUE" and playback speed labels on the left side of playback info in the UI to filled rectangles instead of rectangular borders.
+- When the interface height is below a certain value, use the "small" layout even when the playlist is not displayed.
+- Added `elementSwitcher` element for switching `stackElement`.
+- Added `id` attribute to `element`.
+- Added `stack_element_id` attribute to navigation bar element `navigationBar`.
+- Added functionality to set navigation bar buttons via child element `navigationItem` in `navigationBar`.
+- Added mouse press effect to `navigationBar`.
+- In the "Groove Music Style" UI, added the ability to enter the playback page by clicking the album.
+- Fixed the issue where two identical button elements could not be added to the same UI.
+- Added display panel functionality and `panel` element. Added optional values "showPanel" and "closePanel" to the `key` attribute in `button` element for showing and closing panels.
+- Added optional value "showPlayQueue" to the `key` attribute in  `Button`  element for displaying the playback queue panel.
+- Added optional value "showHideElement" to the `key` attribute in button element `Button` for showing/hiding any element.
+- Added `text` attribute to `button` element, supporting custom display text.
+- Added `icon` attribute to button element `Button`, supporting custom display icons.
+- Added `panel_file_name` and `panel_id` attributes to `button` element for displaying corresponding panel when clicked.
+- Added `related_element_id` attribute to `button` element for showing/hiding an element when clicked.
+- Added `sweep_to_switch` attribute to `stackElement`, allowing switching interfaces via mouse sweep left/right.
+- Added `size_change_to_switch` attribute to `stackElement`, allowing switching display when size changes.
+- Added `related_stack_elements` attribute to `stackElement` for setting linked switching between stack elements.
+- Removed `toolbar` element; toolbars in UI1 and UI2 are now created in XML.
+- Added `color_style` attribute to text element `Text`, allowing setting text color styles.
+- Updated UI12, adding buttons under the "Folder", "Playlist", and "My favorite" tabs.
+- Added `icon` type for displaying static icons.
+- Updated Interface 4 with a new left-side navigation bar.
+
+**Bug Fixes:**
+
+- Fixed the issue where double-clicking in the mini-mode playlist did not play the track.
+- Fixed the issue where the "Update Source" option in General Settings was not saved to the configuration file #836.
+- Fixed the issue in the lyric edit dialog where executing "Replace Time Tag" or "Delete Time Tag" when the current line had no time tag would delete the entire line #835.
+- Fixed the issue in the lyric edit dialog where executing "Swap Lyrics and Translation" without a translation would result in an extra " / ".
+- Fixed the issue in the Media Library dialog → Folder tab where the "Play Selected" button remained grayed out after selecting a folder.
+- Fixed the issue where the tree control background color in the "Media Library" dialog → "Folder explore" appeared abnormal in Wine environments.
+- Fixed the issue in "Options Settings" where album cover files and default background images using relative paths might not be recognized #861.
+- Fixed the flickering issue in the title bar area when activating the window after removing the top border #876.
+- Fixed lyric search failures caused by changes to the NetEase Cloud Music API #887.
+- Fixed the issue where some audio files would get stuck at the end of playback when using the FFMPEG kernel #820 #822.
+- Fixed the issue in the format conversion dialog where the progress bar remained at 0% if conversion failed to start due to an error.
+- Fixed the issue in "Options Settings" → "Appearance Settings" where directly editing the "External picture file name" text box and clicking OK would not save the changes.
+- Fixed the issue where album information was incorrectly passed as artist information to the system media transport controls #896.
+- Fixed the issue where, after maximizing the main window on a secondary monitor, minimizing and then clicking the taskbar button would cause the window to display on the primary monitor #859.
+- Fixed various crash issues.
+
+## V2.77.1 (2024/08/23)
+
+This update fixed several issues since version 2.77. No new features added.
+* Fixed the problem that the "Add to Playlist" submenu in the context menu sometimes abnormally disabled.
+* Fixed the problem that the test text was not deleted when clicking the "AB Repeat" button.
+* Fixed the problem that the mouse tooltip of the "AB Repeat" button was not correct.
+* Fixed the problem that the control in the dialog box is too crowded vertically at 100% zoom ratio.
+* Fixed the problem that lyrics text is too big and incomplete when entering mini mode from full screen mode.
+* Fixed the problem that the internal album cover of acc files can not be displayed in the property dialog box.
+
+## V2.77 (2024/08/12)
+
+**bug fixes:**
+
+* Fixed the problem that "ALBUMARTIS" and "DISCNUMBER" fields are duplicated when editing the label information of audio files.
+* Fixed the problem that the taskbar of Windows 11 not responding.
+* Fixed the problem that the tabs of the Options Settings dialog and the self-drawn playlist scroll too fast when using touchpad gestures.
+* Fixed the problem that the volume adjustment too fast when using touchpad gestures.
+* Fixed the problem that buttons not shown in the interface can still be clicked after the stackElement is switched.
+* Fixed the problem that some icons in the interface are not clear when the system scaling ratio is 125% and 150%.
+* Fixed the problem that the button in the top right corner overlaps with other elements in the interface when "Use system standard title bar" is enabled.
+* Fixed the problem that strings containing numeric prefixes are not sorted by value when the playlist is sorted.
+* Fixed the problem that the functions of "Select All", "Select None" and "Select Reverse" in the playlist menu don't work for the self-drawn playlist.
+* Fix the problem that tracks can still be deleted by pressing the Delete key after deleting them from the playlist.
+
+**New Features:**
+
+* Added the splitter control in main window and media library window.
+* Added the option to ignore audio files that are too short when the media library is updated.
+* Added "Auto" for lyrics alignment in lyrics settings. Lyrics alignment is valid for double line display mode.
+* Added the option of "Insert at the start of the playlist when adding songs, not at the end".
+* Add the function of "Sort by listen time" in the playlist sorting menu.
+* When playing from the "Artist", "Album", "All Tracks", etc. in the media library, it will play directly from the media library mode instead of adding it to the [Temporary playlist].
+* Added the recently played media library item to playlist dropdown menu
+* Added the "Navigation Bar", "Recently Played", "Folder", "Playlist", "My Favorite", "Media Library Items" and "All Tracks" element to the user-defined interface.
+* UI "Groove Music Style", "Groove Music Style (Windows 11)" updated, added the left navigation bar.
+* Added the UI12.
+* Added the "font_size" attribute to "playlist", "playlistIndicator" and "trackInfo" element in user-defined interface.
+* Added the "show_text" and "font_size" attributes to the button element in the user-defined interface. The button can display text on the right side of the icon.
+* The maximum font size in user-defined interface is increased to 16 pounds.
+* The path of a local file or folder is allow to entered in the edit box  in the "Open url" dialog.
+* Added the "Mini mode 3" UI.
+* Added buttons of "Play", "Add to Playlist", "Add to My Favorite" in the corresponding rows when the mouse is pointed to the playlist.
+* If the song in the playlist is in "My Favorite", a red heart icon will be shown on the right side.
+* Added the function of "Remove from playlist" in the context menu of the list on the right side of the "Playlist" tab in the "Media Library" dialog box.
+* Added the function of "Sort mode" to the interface of "Folder" and "Playlist" in Media Library.
+* Removing a track from a playlist displays a confirmation dialog to avoid misoperation.
+* Added the "Add to playlist" command to the folder context menu.
+* Added the "Add to my favorite" option to "Global shortcut key".
+* Added support for multi-selection of self-drawn playlists. Added support for selecting all by pressing Ctrl+A.
+* After successfully executing the "Add to Playlist" command, a success message will be displayed in the center of the interface.
+* Added the option of whether to allow "Global Mouse Wheel Volume Adjustment" in General Settings.
+
+**Update Note:**
+
+* After version 2.77, the translation files are stored in the "language" directory. When updating, please make sure to copy the language directory to the MusicPlayer2 directory as well.
+
+* The layout of the controls in the Option Settings dialog has changed since version 2.77, this is to ensure that the text is fully displayed in different languages.
+
+* About the white border at the top of the title bar on Windows 10/11, an option has been added in this version to remove this white border:
+
+  Just open the configuration file "config.ini" while making sure the program exits, find the "remove_titlebar_top_frame" option under [config] and change it to "true". This feature is turned off by default and not added to the UI as there are still some issues with the window flickering when it gains and loses focus.
+
+## V2.76.1 (2023/04/22)
+
+Urgently fix the problem of not being able to automatically associate lyrics files.It is recommended that all users with version V2.76 update to this version.
+
+## V2.76 (2023/04/02)
+
+* Added the function of customizing the mini mode UI. Added 2 mini mode UI.
+* Added the function of self-drawn playlist. Added the self-drawn playlist to "UI 4", "UI 6", "Groove Music Style", "Groove Music Style (Windows11)", and "default UI".
+* Added the function of customizing the save location of the album cover.
+* Added the support for verbatim lyrics in ksc format.
+* Added the function of "Play After Current Song" in the playlist right-click menu.
+* Added the FLAC format output support in Format conversion.
+* Added the function to sync playing tracks and playback records to LastFM.
+* Added support of the right-click menu by long-pressing on touchscreen devices.
+* Added the function of saving the cue audio tracks to the media library.
+* Added the function of customizing the row height of the playlist.
+* Added the function of customizing the buttons in the self-drawn title bar.
+* Added a dark/light toggle button.
+* Added the function to display track information in the lyrics area when there are no lyrics.
+* Updated several icons, fixed some icon that were blurry when scaled at 100%.
+* Fixed the issue that the program cannot be exited by right-clicking the notification area icon when a dialog box opened.
+* Added the function of writing the cue tag information and displaying the advanced label information of cue format.
+* Fixed the issue that the playlist cannot be saved in m3u and m3u8 formats when the playlists contains cue tracks.
+* When sorting by track number in the media library, sorting by CD number is preferred.
+* Add thread synchronization when media library update, increase the stability of the program.
+* Fixed the problem that conversion complite displayed when conversion errors in Format Conversion.
+* Added the functions of "Fix the wrong file path" and "Open the playlist file location" in the right-click menu of the playlist in the media library.
+* Added the function to remember the index of Stack Elements in the user defined UI.
+* Added the option of enable or disable MediaTransControl in the Option Settings.
+* Added "Artist - Album" type to Text element in user defined UI.
+* Improvements in other details.
+* Other bug fixes.
+
+## V2.75 (2022/06/04)
+
+* Add the FFMPEG playback core (need to be downloaded separately).
+* Add some new UI layouts.
+* The UI 3, UI 4 and UI 5 are reproduced using xml and optimized the effect of UI 4.
+* Add stacking components to custom UI.
+* Optimized the use logic of floating playlist.
+* Fix the problem that buffer shortage may occur when writing ini.
+* When creating a new playlist in the media library, the new playlist is brought to the front.
+* Self-drawn controls follow the "Use Rounded Corner Style" setting.
+* Fixed the problem that "Reverb" in "Sound Settings" could not be saved.
+* Add the self-drawn menu bar.
+* Improvements in other details.
+
+## V2.74 (2022/02/12)
+
+* Added the function of customizing the UI through the xml file (please refer to the main menu "Help" - "Customize UI").
+
+* Added 3 new UI layout.
+* Added support for System Media Transport Controls, which integrates playback controls into the system and supports the use of multimedia keys or Bluetooth devices to control music playback.
+* Added the function to quickly switch folders/playlists through the drop-down menu of the "Folder/Playlist" text box.
+* Added settings for the save location of configuration and data files.
+* Added the volume icon.
+* Added the display of sampling frequency, number of channels and bit depth in song properties.
+* Added the function to delete the embedded album by "Delete Album Cover" in the context menu.
+* Fixed a crash when "Allow play information displayed in the taskbar search box" is enabled under Windows 11.
+* Added some icons to some dialogs.
+* The floating playlist moves with the main window.
+* Fixed an issue where song info would sometimes be refetched on every launch.
+* Added theo ption "Do not display blank lines in single-line and double-line display mode" in "Options" - "Lyric Settings".
+
+## V2.73 (2021/08/22)
+
+* Added two new UI layout.
+
+* Added the function of song rating.
+* Added the function of manually refreshing the media library in the media library settings.
+* Added the function of using self-drawn title bar (remove the check of "Main Menu-View-Use System Standard Title Bar").
+* Added support for multi-monitor in mini mode.
+* Absolute path is supported for external album cover in option settings.
+* Added support for lyric files encoded in UTF16 format.
+* Added the analysis of the original text and translation of the lyrics with the same time tag.
+* Added the function of customizing the output file name in the conversion format.
+* Added the setting to display or hide the playlist tool tip in the option settings.
+* Added desktop lyrics alignment settings.
+* The display of the desktop lyrics follow the settings of the lyrics karaoke style.
+* Added "show/hide" player shortcut keys in global shortcut key settings.
+* Added the option of "disable delete from disk" in the option settings.
+* Added the function of automatically switching the playback device when the playback device changes.
+* Added the setting of writing version of ID3v2.
+* Fixed the problem that when using the mouse wheel to scroll the page in the option settings, the controls on the page will respond to the mouse wheel message.
+* Fixed the problem that some Unicode characters in the written label information will become question marks after being converted to mp3 format in the conversion format.
+* Fixed the problem that the global shortcut key settings may be wrong when loading from the configuration file.
+* Fixed the problem that the last character of the desktop lyrics cannot be displayed when using certain fonts.
+* Fixed an issue where the current playlist may be saved to the wrong file when switching playlists.
+* Improvements in other details.
+
 ## V2.72 (2021/01/24)
 
 * Add a new interface layout.
@@ -14,7 +242,7 @@
 * Added support for TAK format audio (32-bit version only).
 * The "Edit Lyrics" editor changed to use Scintilla. Add the colors for the lyric editor.
 * Fixed the problem that the album cover cannot be copied to the target file when the format is converted to mp3 and wav.
-* Fixed the problem that there is no icon in "Repead Mode"-"Play Random" in the desktop lyrics right-click menu.
+* Fixed the problem that there is no icon in "Repeat Mode"-"Play Random" in the desktop lyrics right-click menu.
 * Fixed the problem that the sub-dialog in the "Option Setting" dialog cannot be scrolled using the touch screen when using a touch screen device.
 * Fixed the problem that "file already exists" is prompted when adding a currently playing track to a new playlist.
 * Fixed the problem that if the position of the child window in the "Option Setting" dialog is scrolled by the mouse wheel, the position of the child window is incorrect when the scroll bar is clicked.

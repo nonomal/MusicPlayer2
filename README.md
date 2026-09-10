@@ -1,8 +1,10 @@
-**简体中文 | [English](https://github.com/zhongyang219/MusicPlayer2/blob/master/README_en-us.md)**
+**简体中文 | [English](./README_en-us.md)**
+
+<a href="https://hellogithub.com/repository/zhongyang219/MusicPlayer2" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=1ad354e5ab404301919665ac7973cd07&claim_uid=CeVqou2T1dIvfQP&theme=neutral" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54" /></a>
 
 # MusicPlayer2 简介
 
-MusicPlayer2是一款集音乐播放、歌词显示、格式转换等众多功能于一身的音频播放软件。支持歌词显示、歌词卡拉OK样式显示、歌词在线下载、歌词编辑、歌曲标签识别、专辑封面显示、专辑封面在线下载、频谱分析、音效设置、任务栏缩略图按钮、主题颜色、格式转换等功能。播放内核为BASS音频库(V2.4)。播放器支持几乎所有常见的音频格式。
+MusicPlayer2是一款功能强大的本地音乐播放软件，旨在为用户提供最佳的本地音乐播放体验。它支持歌词显示、歌词卡拉OK样式显示、歌词在线下载、歌词编辑、歌曲标签识别、专辑封面显示、专辑封面在线下载、频谱分析、音效设置、任务栏缩略图按钮、主题颜色、格式转换等功能，支持高度自定义的界面布局，支持多种播放内核（BASS和FFMpeg）。播放器支持大部分常见的音频格式。
 
 # 相关链接：
 
@@ -10,7 +12,7 @@ MusicPlayer2是一款集音乐播放、歌词显示、格式转换等众多功�
 
 国内备用下载链接：[百度网盘下载](https://pan.baidu.com/s/1i5QNwFF)
 
-MusicPlayer2依赖于Microsoft Visual C++ 运行环境，如果程序启动时提示“找不到MSVC*.dll”，请点击以下链接下载并安装Microsoft Visual C++ 运行环境。
+MusicPlayer2依赖于Microsoft Visual C++ 运行环境，如果程序启动时提示“找不到MSVC\*.dll”，请点击以下链接下载并安装Microsoft Visual C++ 运行环境。
 
 [最新支持的 Visual C++ 可再发行程序包下载 | Microsoft Docs](https://docs.microsoft.com/zh-CN/cpp/windows/latest-supported-vc-redist?view=msvc-170)
 
@@ -40,6 +42,7 @@ scoop install extras/musicplayer2
 * 背景高斯模糊
 * 格式转换
 * 媒体库功能
+* xml自定义界面布局
 
 # 使用说明
 
@@ -77,15 +80,27 @@ scoop install extras/musicplayer2
 
 <img src="Screenshots/main_window_ui4.png" style="zoom:80%;" />
 
+播放详情页（界面4）▼
+
+<img src="Screenshots/main_window_ui4_detail.png" style="zoom:80%;" />
+
 主窗口（界面5）▼
 
 <img src="Screenshots/main_window_ui5.png" style="zoom:80%;" />
+
+主界面（Groove音乐风格Windows11）
+
+<img src="Screenshots/main_window_ui_groove_music.png" style="zoom:80%;" />
+
+播放详情页（Groove音乐风格Windows11）
+
+<img src="Screenshots/main_window_ui_groove_music_detail.png" style="zoom:80%;" />
 
 迷你模式▼
 
 <img src="Screenshots/Mini_mode.png" style="zoom:80%;" />
 
-Cortana搜索框显示歌词▼
+Windows 10 搜索框显示歌词▼
 
 <img src="Screenshots/Cortana_lyric.png" style="zoom:80%;" />
 
@@ -104,3 +119,10 @@ Cortana搜索框显示歌词▼
 # 更新日志
 
 **[点击此处查看更新日志](https://github.com/zhongyang219/MusicPlayer2/blob/master/Documents/update_log.md)**
+
+# 开发环境部署
+
+MusicPlayer2仅支持Windows系统下开发和运行。要编译MusicPlayer2的源代码，需要安装Visual Studio 2022，安装时选择C++开发环境，并且必须勾选MFC。
+
+安装好Visual Studio 2022之后打开解决方案文件`MusicPlayer2.sln`编译运行即可。
+

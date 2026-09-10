@@ -1,20 +1,25 @@
 ﻿#pragma once
 //自定义包含文件
-//#include <conio.h >
 #include <vector>
 #include <io.h>
 #include <string>
-//#include <Windows.h>
+#include <algorithm>
 #include <fstream>
-#include <iostream>
-#include <algorithm>
-#include <tuple>
-#include <deque>
-#include <algorithm>
+#include <sstream>
 #include <iomanip>
 #include <map>
-#include <cmath>
+#include <set>
+#include <stack>
 #include <unordered_map>
+#include <unordered_set>
+#include <deque>
+#include <list>
+#include <mutex>
+#include <shared_mutex>
+#include <cmath>
+#include <memory>
+#include <functional>
+#include <array>
 using std::ofstream;
 using std::ifstream;
 using std::string;
@@ -22,9 +27,10 @@ using std::wstring;
 using std::vector;
 using std::deque;
 using std::map;
+using std::pair;
 
 //用于BASS音频库的支持
-#include"bass.h"
+#include "bass.h"
 //#ifdef _M_X64
 //#pragma comment(lib,"bass_x64.lib")
 //#else
@@ -68,8 +74,8 @@ using _tstring = std::string;
 //#define MAX_NUM_LENGTH 5000		//定义获取音频文件信息数量的最大值
 #define MAX_SONG_NUM 99999		//播放列表中文件数量的最大值
 
-#define APP_VERSION L"2.73"	//程序版本
-#define COPY_RIGHT_YEAR L"2021"
+#define APP_VERSION L"2.78"	//程序版本
+#define COPY_RIGHT_YEAR L"2025"
 
 //任务栏图按钮
 #define IDT_PLAY_PAUSE 1321		//任务栏缩略图“播放/暂停”按钮的ID
@@ -86,25 +92,25 @@ using _tstring = std::string;
 #define TIMER_1_SEC 1237
 #define TIMER_DESKTOP_LYRIC 1238
 #define TIMER_DESKTOP_LYRIC_2 1239
+#define TIMER_CMD_OPEN_FILES_DELAY 1240
 
 #define UI_INTERVAL_DEFAULT 50   //定义界面刷新时间的默认时间间隔（毫秒）
-#define MIN_UI_INTERVAL 10      //界面刷新时间间隔最小值
+#define MIN_UI_INTERVAL 2      //界面刷新时间间隔最小值
 #define MAX_UI_INTERVAL 300     //界面刷新时间间隔最大值
 #define UI_INTERVAL_STEP 10     //调整界面刷新时间间隔的步长
+#define LYRIC_BLANK_IGNORE_TIME 3000           //歌词双行显示、桌面歌词中忽略空白歌词的时间
+#define MIN_PLAYLIST_ITEM_HEIGHT 20
+#define MAX_PLAYLIST_ITEM_HEIGHT 64
 
 //#define TIMER_ID_SPECTRAL
 //#define TIMER_ID_EXIT 1237
 
 //频谱分析
-#define FFT_SAMPLE 256			//频谱分析采样点数
-//#define FFT_NUM 128			//要使用的频谱的点数
-#define SPECTRUM_COL 64			//频谱分析柱形的条数（必须为2的整数次方且小于或等于FFT_SAMPLE）
+#define FFT_SAMPLE 512			//频谱分析采样点数
+#define SPECTRUM_COL (FFT_SAMPLE / 4)	//频谱分析柱形的条数（必须为2的整数次方且小于或等于FFT_SAMPLE）
 
 #define IDC_SAVE_COMBO_BOX 1990		//定义添加到“另存为”对话框中的组合框的ID
 #define IDC_OPEN_CHECKBOX 1991		//定义添加到“添加文件夹”对话框中的复选框的ID
-
-//添加到系统菜单中的“迷你模式”菜单项的ID
-#define IDM_MINIMODE 112
 
 //均衡器
 #define EQU_CH_NUM 10		//均衡器通道的数量
@@ -126,16 +132,15 @@ const int EQU_STYLE_TABLE[9][EQU_CH_NUM]		//均衡器预设
 #define ALBUM_COVER_NAME L"CurrentAlbumCover-MusicPlayer2-jMZB7TMf"
 #define ALBUM_COVER_TEMP_NAME L"TempAlbumCover-MusicPlayer2-nKWfQeJo"
 #define ALBUM_COVER_TEMP_NAME2 L"TempAlbumCover-MusicPlayer2-ogNdd65B"
+#define ALBUM_COVER_TEMP_NAME_FOR_PROPERTIES L"TempAlbumCover-MusicPlayer2-6vQ0kGpV"
 //#define DEFAULT_ALBUM_NAME L"cover"
 
 //#define BACKGROUND_ALPHA 200	//界面背景的透明度0~255
 #define ALPHA_CHG(alpha) ((alpha)*255/100)		//将透明度从0~100映射到0~255
 
 #define LOCAL_DIR_STR L"%localdir%"
-#define DEFAULT_PLAYLIST_NAME L"default_playlist.playlist"
-#define FAVOURITE_PLAYLIST_NAME L"favourite.playlist"
-#define TEMP_PLAYLIST_NAME L"temp.playlist"
 #define PLAYLIST_EXTENSION L".playlist"
+#define PLAYLIST_EXTENSION_2 L"playlist"
 #define APP_NAME L"MusicPlayer2"
 #define NO_LYRIC_STR L"NoLyric"
 #define DEFAULT_BACKGROUND_NAME L"default_background.jpg"
@@ -155,10 +160,19 @@ const int EQU_STYLE_TABLE[9][EQU_CH_NUM]		//均衡器预设
 #define WM_PROPERTY_DIALOG_MODIFIED (WM_USER+134)       //属性对话框中进行了编辑
 #define WM_CURRENT_FILE_ALBUM_COVER_CHANGED (WM_USER+135)
 #define WM_PORPERTY_ONLINE_INFO_ACQUIRED (WM_USER+136)
+#define WM_RE_INIT_BASS_CONTINUE_PLAY (WM_USER+138) // BASS内核出问题时post此消息到主窗口重启内核（wParam: 是否停止播放 1:停止播放 0:继续播放）
 #define WM_VOLUME_CHANGED (WM_USER+139)             //音量变化时发送的消息
-#define WM_RECENT_FOLSER_OR_PLAYLIST_CHANGED (WM_USER+140)  //最近打开的文件夹或播放列表发生了改变
+#define WM_RECENT_FOLDER_OR_PLAYLIST_CHANGED (WM_USER+140)  //最近打开的文件夹或播放列表发生了改变
+#define WM_SET_UI_FORCE_FRESH_FLAG (WM_USER+141)            // 通知主窗口设置UI强制刷新标志m_ui_thread_para.ui_force_refresh
 
-#define WM_NEXT_USER_MSG (WM_USER+141)
+//通知主窗口清除UI中搜索框中搜索结果，其中wPara为搜索框关联列表元素的类型，在下面几行定义
+//仅当列表元素的内容发生了改变但是总行数未变的情况下需要发送此消息，行数变化的情况已经在UiElement::AbstractListElement::OnRowCountChanged中处理
+#define WM_CLEAR_UI_SERCH_BOX ((WM_USER+142)) 
+#define UI_LIST_TYPE_RECENT_PLAYED 0
+#define UI_LIST_TYPE_FOLDER 1
+#define UI_LIST_TYPE_PLAYLIST 2
+
+#define WM_NEXT_USER_MSG (WM_USER+143)
 
 #ifdef _DEBUG
 #define ADD_TO_PLAYLIST_MAX_SIZE 10         //“添加到播放列表”子菜单中项目的最大数量（不能超过40）
@@ -184,3 +198,6 @@ const int EQU_STYLE_TABLE[9][EQU_CH_NUM]		//均衡器预设
 //定义通过WM_COPYDATA消息传输数据的类型
 #define COPY_DATA_OPEN_FILE 1       //打开文件
 #define COPY_DATA_ADD_FILE 2        //添加文件
+
+#define MAX_FPS 90      //UI的最大帧率
+#define FPS_LIMIT_MARGIN 10 //限制帧率上下浮动范围

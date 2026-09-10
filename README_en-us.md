@@ -1,8 +1,10 @@
-**[简体中文](https://github.com/zhongyang219/MusicPlayer2/blob/master/README.md) | English**
+**[简体中文](./README.md) | English**
+
+<a href="https://hellogithub.com/repository/zhongyang219/MusicPlayer2" target="_blank"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=1ad354e5ab404301919665ac7973cd07&claim_uid=CeVqou2T1dIvfQP&theme=neutral" alt="Featured｜HelloGitHub" style="width: 250px; height: 54px;" width="250" height="54" /></a>
 
 # MusicPlayer2 Introduction
 
-MusicPlayer2 is an audio player whitch supports music collection playback, lyrics display, format conversion and many other functions. It supports lyrics display, lyrics karaoke style display, lyrics online download, lyrics editing, song tag recognition, album cover display, album cover online download, spectrum analysis, sound effect settings, taskbar thumbnail button, theme color, format conversion and other functions. The playback kernel is the Bass Audio Library (V2.4). The player supports almost all common audio formats.
+MusicPlayer2 is a powerful local music player software designed to provide users with the best local music playback experience. It integrates a wide range of features including lyric display, karaoke-style lyric rendering, online lyric downloading, lyric editing, song tag recognition, album cover display, online album cover downloading, spectrum analysis, audio effect settings, taskbar thumbnail controls, theme colors, format conversion, and more. The player also offers highly customizable interface layouts and supports multiple playback kernels (BASS and FFMpeg). It is compatible with most common audio formats.
 
 # Related Links
 
@@ -10,7 +12,7 @@ Please [click here](https://github.com/zhongyang219/MusicPlayer2/releases)to dow
 
 Alternate link: Download from [Baidu Netdisk](https://pan.baidu.com/s/1i5QNwFF)
 
-MusicPlayer2 relies on the Microsoft Visual C++ runtime environment. If the program prompts "Cannot find MSVC*.dll" when the program starts, please click the link below to download and install the Microsoft Visual C++ runtime environment.
+MusicPlayer2 relies on the Microsoft Visual C++ runtime environment. If the program prompts "Cannot find MSVC\*.dll" when the program starts, please click the link below to download and install the Microsoft Visual C++ runtime environment.
 
 [Latest supported Visual C++ Redistributable downloads | Microsoft Docs](https://docs.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170)
 
@@ -40,6 +42,7 @@ scoop install extras/musicplayer2
 * Background Gaussian Blur
 * Format conversion
 * Media library function
+* customize interface layouts by xml
 
 # Operating Instructions
 
@@ -56,6 +59,8 @@ You have the following ways to open and play a song:
 **[Click here](https://github.com/zhongyang219/MusicPlayer2/wiki) to view the documentation (Only Chinese Available).**
 
 # Screen shoots
+
+The player interface supports switching between multiple layouts, as well as dark and light modes.
 
 Main window (UI2, light mode)▼
 
@@ -85,15 +90,27 @@ Main window (UI4)▼
 
 <img src="Screenshots/main_window_ui4.png" style="zoom:80%;" />
 
+Playback detail page (UI4)▼
+
+<img src="Screenshots/main_window_ui4_detail.png" style="zoom:80%;" />
+
 Main window (UI5)▼
 
 <img src="Screenshots/main_window_ui5.png" style="zoom:80%;" />
+
+Main window (Groove Music Style Windows 11)
+
+<img src="Screenshots/main_window_ui_groove_music.png" style="zoom:80%;" />
+
+Playback detail page (Groove Music Style Windows 11)
+
+<img src="Screenshots/main_window_ui_groove_music_detail.png" style="zoom:80%;" />
 
 Mini mode▼
 
 <img src="Screenshots/Mini_mode.png" style="zoom:80%;" />
 
-Show lyrics in Cortana search box▼
+Show lyrics in Windows 10 search box▼
 
 <img src="Screenshots/Cortana_lyric.png" style="zoom:80%;" />
 
@@ -113,3 +130,8 @@ Option settings - General Settings▼
 
 **[Click here to view the update log.](https://github.com/zhongyang219/MusicPlayer2/blob/master/Documents/update_log_en-us.md)**
 
+# Development Environment Setup
+
+MusicPlayer2 only supports development and operation on Windows systems. To compile the source code of MusicPlayer2, you need to install Visual Studio 2022. During installation, select the C++ development environment, and you must check the option for MFC.
+
+After installing Visual Studio 2022, open the solution file `MusicPlayer2.sln`, compile it, and run the project.

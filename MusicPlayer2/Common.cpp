@@ -3,7 +3,7 @@
 #include "resource.h"
 #include "FilePathHelper.h"
 #include <random>
-#include <functional>
+#include <strsafe.h>
 // #include <pathcch.h>
 
 CCommon::CCommon()
@@ -18,31 +18,36 @@ CCommon::~CCommon()
 
 //void CCommon::GetAllFormatFiles(wstring path, vector<wstring>& files, const vector<wstring>& format, size_t max_file)
 //{
-//	//文件句柄
-//	int hFile = 0;
-//	//文件信息（用Unicode保存使用_wfinddata_t，多字节字符集使用_finddata_t）
-//	_wfinddata_t fileinfo;
-//	wstring file_path;
-//	for (auto a_format : format)
-//	{
-//		if ((hFile = _wfindfirst(file_path.assign(path).append(L"\\*.").append(a_format).c_str(), &fileinfo)) != -1)
-//		{
-//			do
-//			{
-//				if (files.size() >= max_file) break;
-//				files.push_back(file_path.assign(fileinfo.name));  //将文件名保存
-//			} while (_wfindnext(hFile, &fileinfo) == 0);
-//		}
-//		_findclose(hFile);
-//	}
-//	std::sort(files.begin(), files.end());		//对容器里的文件按名称排序
+//  //文件句柄
+//  int hFile = 0;
+//  //文件信息（用Unicode保存使用_wfinddata_t，多字节字符集使用_finddata_t）
+//  _wfinddata_t fileinfo;
+//  wstring file_path;
+//  for (auto a_format : format)
+//  {
+//      if ((hFile = _wfindfirst(file_path.assign(path).append(L"\\*.").append(a_format).c_str(), &fileinfo)) != -1)
+//      {
+//          do
+//          {
+//              if (files.size() >= max_file) break;
+//              files.push_back(file_path.assign(fileinfo.name));  //将文件名保存
+//          } while (_wfindnext(hFile, &fileinfo) == 0);
+//      }
+//      _findclose(hFile);
+//  }
+//  std::sort(files.begin(), files.end());      //对容器里的文件按名称排序
 //}
 
-bool CCommon::FileExist(const wstring& file)
+bool CCommon::FileExist(const wstring& file, bool is_case_sensitive)
 {
-    if (file == L"." || file == L"..")
+    WIN32_FIND_DATA findFileData;
+    HANDLE hFind = FindFirstFileW(file.c_str(), &findFileData);
+    if (hFind == INVALID_HANDLE_VALUE)  // 没有找到说明不区分大小写也没有匹配文件
         return false;
-    return (PathFileExists(file.c_str()) != 0);
+    FindClose(hFind);
+    if (is_case_sensitive)              // 如果需要区分大小写那么重新严格比较
+        return CFilePathHelper(file).GetFileName() == findFileData.cFileName;
+    return true;
 }
 
 bool CCommon::FolderExist(const wstring& file)
@@ -57,16 +62,62 @@ bool CCommon::IsFolder(const wstring& path)
     return (dwAttrib & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
 
-unsigned __int64 CCommon::GetFileLastModified(const wstring& file_path)
+bool CCommon::CheckAndFixFile(wstring& file)
 {
-    WIN32_FIND_DATA ffd;
-    HANDLE hFind = FindFirstFile(file_path.c_str(), &ffd);
+    WIN32_FIND_DATA findFileData;
+    HANDLE hFind = FindFirstFileW(file.c_str(), &findFileData);
+    if (hFind == INVALID_HANDLE_VALUE)
+        return false;
     FindClose(hFind);
-    unsigned __int64 last_modified_time{};
-    last_modified_time = ffd.ftLastWriteTime.dwLowDateTime;
-    unsigned __int64 hight_date_time = ffd.ftLastWriteTime.dwHighDateTime;
-    last_modified_time |= (hight_date_time << 32);
-    return last_modified_time;
+    CFilePathHelper file_path(file);
+    file = file_path.GetDir() + findFileData.cFileName;  // 修正file的文件名大小写到与文件一致
+    return true;
+}
+
+bool CCommon::GetFileLastModified(const wstring& file_path, unsigned __int64& modified_time)
+{
+    // 使用GetFileAttributesEx，耗时大约为FindFirstFile的2/3
+    WIN32_FILE_ATTRIBUTE_DATA file_attributes;
+    if (GetFileAttributesEx(file_path.c_str(), GetFileExInfoStandard, &file_attributes))
+    {
+        ULARGE_INTEGER last_modified_time{};
+        last_modified_time.HighPart = file_attributes.ftLastWriteTime.dwHighDateTime;
+        last_modified_time.LowPart = file_attributes.ftLastWriteTime.dwLowDateTime;
+        modified_time = last_modified_time.QuadPart;
+        return true;
+    }
+    return false;
+}
+
+bool CCommon::GetFileCreateTime(const wstring& file_path, unsigned __int64& create_time)
+{
+    // 使用GetFileAttributesEx，耗时大约为FindFirstFile的2/3
+    WIN32_FILE_ATTRIBUTE_DATA file_attributes;
+    if (GetFileAttributesEx(file_path.c_str(), GetFileExInfoStandard, &file_attributes))
+    {
+        ULARGE_INTEGER time{};
+        time.HighPart = file_attributes.ftCreationTime.dwHighDateTime;
+        time.LowPart = file_attributes.ftCreationTime.dwLowDateTime;
+        create_time = time.QuadPart;
+        return true;
+    }
+    return false;
+}
+
+time_t CCommon::FileTimeToTimeT(unsigned __int64 file_time)
+{
+    if (file_time == 0)
+        return 0;
+    // 1601年到1970年之间的时间间隔，以100纳秒为单位
+    const ULONGLONG epochDelta = 116444736000000000ULL;
+
+    // 将 FILETIME 转换为自1970年1月1日以来的100纳秒间隔数
+    ULONGLONG ull = file_time - epochDelta;
+
+    // 将100纳秒转换为秒
+    time_t t = ull / 10000000ULL;
+
+    return t;
 }
 
 bool CCommon::IsFileHidden(const wstring& file_path)
@@ -115,35 +166,40 @@ bool CCommon::StringCsvNormalize(CString& str)
 
 //bool CCommon::FileIsMidi(const wstring & file_name)
 //{
-//	wstring type;
-//	type = file_name.substr(file_name.size() - 4, 4);			//获取扩展名
-//	std::transform(type.begin(), type.end(), type.begin(), tolower);		//将扩展名转换成小写
-//	return (type == L".mid");
+//  wstring type;
+//  type = file_name.substr(file_name.size() - 4, 4);           //获取扩展名
+//  std::transform(type.begin(), type.end(), type.begin(), tolower);        //将扩展名转换成小写
+//  return (type == L".mid");
 //}
 
 void CCommon::StringCopy(char* dest, int size, string source)
 {
     int source_size = source.size();
-    for (int i{}; i < size && i < source_size; i++)
+    int i{};
+    for (; i < size && i < source_size; i++)
     {
         dest[i] = source[i];
+    }
+    if (i < size)
+    {
+        dest[i] = '\0';
     }
 }
 
 //bool CCommon::StringCompareNoCase(const wstring & str1, const wstring & str2)
 //{
-//	wstring _str1{ str1 }, _str2{ str2 };
-//	StringTransform(_str1, false);
-//	StringTransform(_str2, false);
-//	return (_str1 == _str2);
+//  wstring _str1{ str1 }, _str2{ str2 };
+//  StringTransform(_str1, false);
+//  StringTransform(_str2, false);
+//  return (_str1 == _str2);
 //}
 
 //size_t CCommon::StringFindNoCase(const wstring & str, const wstring & find_str)
 //{
-//	wstring _str{ str }, _find_str{ find_str };
-//	StringTransform(_str, false);
-//	StringTransform(_find_str, false);
-//	return _str.find(_find_str);
+//  wstring _str{ str }, _find_str{ find_str };
+//  StringTransform(_str, false);
+//  StringTransform(_find_str, false);
+//  return _str.find(_find_str);
 //}
 
 bool CCommon::IsDivideChar(wchar_t ch)
@@ -171,7 +227,66 @@ bool CCommon::CharIsNumber(wchar_t ch)
     return (ch >= L'0' && ch <= L'9');
 }
 
-void CCommon::StringSplit(const wstring& str, wchar_t div_ch, vector<wstring>& results, bool skip_empty, bool trim)
+int CCommon::StringToInt(const wstring& str)
+{
+    size_t start{ std::wstring::npos };
+    size_t end{ std::wstring::npos };
+    for (size_t i{}; i < str.size(); i++)
+    {
+        //标记第一个数字的位置
+        if (CharIsNumber(str[i]) && start == std::wstring::npos)
+            start = i;
+        //标记找到第一个数字后第一个不是数字的位置
+        if (start != std::wstring::npos && !CharIsNumber(str[i]))
+        {
+            end = i;
+            break;
+        }
+    }
+    if (start < str.size() && end > start)
+    {
+        wstring num_str = str.substr(start, end - start);
+        return _wtoi(num_str.c_str());
+    }
+    return 0;
+}
+
+void CCommon::StringSplitLine(const wstring& source_str, vector<wstring>& results, bool skip_empty, bool trim)
+{
+    results.clear();
+    if (source_str.empty())
+        return;
+
+    auto push_back_str = [&](const wchar_t* start, const wchar_t* end)
+        {
+            wstring tmp(start, end);
+            if (trim)
+                StringNormalize(tmp);
+            if (!skip_empty || !tmp.empty())
+                results.push_back(std::move(tmp));
+        };
+
+    const wchar_t* line_start_pos = source_str.data();
+    const wchar_t* cur_pos = line_start_pos;
+    const wchar_t* end_pos = line_start_pos + source_str.size();
+    while (cur_pos < end_pos)
+    {
+        if (*cur_pos == L'\r' || *cur_pos == L'\n')
+        {
+            push_back_str(line_start_pos, cur_pos);
+            ++cur_pos;                                          // 指针移动到下一个字符
+            if (*cur_pos == L'\n' && *(cur_pos - 1) == L'\r')   // 如果下一个字符是LF且位于CR后面那么跳过
+                ++cur_pos;
+            line_start_pos = cur_pos;
+        }
+        else
+            ++cur_pos;
+    }
+    push_back_str(line_start_pos, cur_pos);
+}
+
+template<class T>
+static void _StringSplit(const T& str, wchar_t div_ch, vector<T>& results, bool skip_empty, bool trim)
 {
     results.clear();
     size_t split_index = -1;
@@ -179,9 +294,9 @@ void CCommon::StringSplit(const wstring& str, wchar_t div_ch, vector<wstring>& r
     while (true)
     {
         split_index = str.find(div_ch, split_index + 1);
-        wstring split_str = str.substr(last_split_index + 1, split_index - last_split_index - 1);
+        T split_str = str.substr(last_split_index + 1, split_index - last_split_index - 1);
         if (trim)
-            StringNormalize(split_str);
+            CCommon::StringNormalize(split_str);
         if (!split_str.empty() || !skip_empty)
             results.push_back(split_str);
         if (split_index == wstring::npos)
@@ -190,7 +305,8 @@ void CCommon::StringSplit(const wstring& str, wchar_t div_ch, vector<wstring>& r
     }
 }
 
-void CCommon::StringSplit(const wstring& str, const wstring& div_str, vector<wstring>& results, bool skip_empty /*= true*/, bool trim)
+template<class T>
+void _StringSplit(const T& str, const T& div_str, vector<T>& results, bool skip_empty /*= true*/, bool trim)
 {
     results.clear();
     size_t split_index = 0 - div_str.size();
@@ -198,9 +314,9 @@ void CCommon::StringSplit(const wstring& str, const wstring& div_str, vector<wst
     while (true)
     {
         split_index = str.find(div_str, split_index + div_str.size());
-        wstring split_str = str.substr(last_split_index + div_str.size(), split_index - last_split_index - div_str.size());
+        T split_str = str.substr(last_split_index + div_str.size(), split_index - last_split_index - div_str.size());
         if (trim)
-            StringNormalize(split_str);
+            CCommon::StringNormalize(split_str);
         if (!split_str.empty() || !skip_empty)
             results.push_back(split_str);
         if (split_index == wstring::npos)
@@ -209,7 +325,27 @@ void CCommon::StringSplit(const wstring& str, const wstring& div_str, vector<wst
     }
 }
 
-void CCommon::StringSplitWithMulitChars(const wstring& str, const wchar_t* div_ch, vector<wstring>& results, bool skip_empty /*= true*/)
+void CCommon::StringSplit(const wstring& str, wchar_t div_ch, vector<wstring>& results, bool skip_empty, bool trim)
+{
+    _StringSplit<std::wstring>(str, div_ch, results, skip_empty, trim);
+}
+
+void CCommon::StringSplit(const wstring& str, const wstring& div_str, vector<wstring>& results, bool skip_empty /*= true*/, bool trim)
+{
+    _StringSplit<std::wstring>(str, div_str, results, skip_empty, trim);
+}
+
+void CCommon::StringSplit(const string& str, char div_ch, vector<string>& result, bool skip_empty, bool trim)
+{
+    _StringSplit<std::string>(str, div_ch, result, skip_empty, trim);
+}
+
+void CCommon::StringSplit(const string& str, const string& div_str, vector<string>& results, bool skip_empty, bool trim)
+{
+    _StringSplit<std::string>(str, div_str, results, skip_empty, trim);
+}
+
+void CCommon::StringSplitWithMulitChars(const wstring& str, const wstring& div_ch, vector<wstring>& results, bool skip_empty /*= true*/)
 {
     results.clear();
     size_t split_index = -1;
@@ -277,6 +413,36 @@ wstring CCommon::StringMerge(const vector<wstring>& strings, wchar_t div_ch)
     return result;
 }
 
+wstring CCommon::MergeStringList(const vector<wstring>& values)
+{
+    wstring str_merge;
+    int index = 0;
+    // 在每个字符串前后加上引号，再将它们用逗号连接起来
+    for (wstring str : values)
+    {
+        StringNormalize(str);
+        if (str.empty()) continue;
+        if (index > 0)
+            str_merge.push_back(L',');
+        str_merge.push_back(L'\"');
+        str_merge += str;
+        str_merge.push_back(L'\"');
+        index++;
+    }
+    return str_merge;
+}
+
+void CCommon::SplitStringList(vector<wstring>& values, const wstring& str_value)
+{
+    CCommon::StringSplit(str_value, L"\",\"", values);
+    if (!values.empty())
+    {
+        // 结果中第一项前面和最后一项的后面各还有一个引号，将它们删除
+        values.front() = values.front().substr(1);
+        values.back().pop_back();
+    }
+}
+
 wstring CCommon::TranslateToSimplifiedChinese(const wstring& str)
 {
     wstring result;
@@ -329,6 +495,23 @@ void CCommon::FileNameNormalize(wstring& file_name)
     }
 }
 
+bool CCommon::CheckFilePathLength(std::wstring& file_path)
+{
+    CFilePathHelper file_path_helper(file_path);
+    std::wstring file_ext = file_path_helper.GetFileExtension(false, true);
+    std::wstring file_name = file_path_helper.GetFileNameWithoutExtension();
+    std::wstring file_dir = file_path_helper.GetDir();
+    //最大的文件名长度（比MAX_PATH少12个字符，留出一些余裕）
+    int file_name_max_length = MAX_PATH - 12 - static_cast<int>(file_dir.size()) - static_cast<int>(file_ext.size());
+    if (file_name_max_length > 0 && static_cast<int>(file_name.size()) > file_name_max_length)
+    {
+        file_name = file_name.substr(0, file_name_max_length);
+        file_path = file_dir + file_name + file_ext;
+        return false;
+    }
+    return true;
+}
+
 bool CCommon::IsFileNameValid(const wstring& file_name)
 {
     const wstring invalid_chars{ L"\\\"/:*?<>|\a\b\f\n\r\t\v" };
@@ -343,7 +526,7 @@ size_t CCommon::GetFileSize(const wstring& file_name)
     file.seekg(0, std::ios::end);
     m = file.tellg();
     file.close();
-    return m - l;
+    return static_cast<size_t>(m - l);
 }
 
 wstring CCommon::StrToUnicode(const string& str, CodeType code_type, bool auto_utf8)
@@ -354,7 +537,7 @@ wstring CCommon::StrToUnicode(const string& str, CodeType code_type, bool auto_u
     // auto_utf8有可能将过短的ANSI误认为是UTF8导致乱码
     if (str.empty()) return wstring();
     // code_type为AUTO时从这里开始
-    if (code_type == CodeType::AUTO)	// 先根据BOM判断编码类型
+    if (code_type == CodeType::AUTO)    // 先根据BOM判断编码类型
     {
         code_type = JudgeCodeType(str, CodeType::ANSI, auto_utf8);
     }
@@ -458,7 +641,7 @@ string CCommon::UnicodeToStr(const wstring& wstr, CodeType code_type, bool* char
     else if (code_type == CodeType::UTF16LE)
     {
         result.clear();
-        result.push_back(-1);	//在前面加上UTF16LE的BOM
+        result.push_back(-1);   //在前面加上UTF16LE的BOM
         result.push_back(-2);
         result.append((const char*)wstr.c_str(), (const char*)wstr.c_str() + wstr.size() * 2);
         result.push_back('\0');
@@ -466,7 +649,7 @@ string CCommon::UnicodeToStr(const wstring& wstr, CodeType code_type, bool* char
     else if (code_type == CodeType::UTF16BE)
     {
         result.clear();
-        result.push_back(-2);	//在前面加上UTF16BE的BOM
+        result.push_back(-2);   //在前面加上UTF16BE的BOM
         result.push_back(-1);
         wchar_t* p = (wchar_t*)wstr.c_str();
         convertBE_LE(p, wstr.size());
@@ -482,9 +665,21 @@ string CCommon::UnicodeToStr(const wstring& wstr, CodeType code_type, bool* char
 wstring CCommon::ASCIIToUnicode(const string& ascii)
 {
     wstring result;
-    for (const char& ch : ascii)
+    result.resize(ascii.size());
+    for (size_t i = 0; i < ascii.size(); i++)
     {
-        result.push_back(ch);
+        result[i] = ascii[i];
+    }
+    return result;
+}
+
+string CCommon::UnicodeToAscii(const wstring& wstr)
+{
+    string result;
+    result.resize(wstr.size());
+    for (size_t i = 0; i < wstr.size(); i++)
+    {
+        result[i] = static_cast<char>(wstr[i]);
     }
     return result;
 }
@@ -525,7 +720,7 @@ bool CCommon::IsUTF8Bytes(const char* data)
             charByteCounter--;
         }
     }
-    if (ascii) return false;		//如果全是ASCII字符，返回false
+    if (ascii) return false;        //如果全是ASCII字符，返回false
     else return true;
 }
 
@@ -552,7 +747,9 @@ CodeType CCommon::JudgeCodeType(const string& str, CodeType default_code, bool a
 
 bool CCommon::IsURL(const wstring& str)
 {
-    return (str.substr(0, 7) == L"http://" || str.substr(0, 8) == L"https://" || str.substr(0, 6) == L"ftp://" || str.substr(0, 6) == L"mms://");
+    std::wstring str_url{ str };
+    StringTransform(str_url, false);
+    return (str_url.substr(0, 7) == L"http://" || str_url.substr(0, 8) == L"https://" || str_url.substr(0, 6) == L"ftp://" || str_url.substr(0, 6) == L"mms://");
 }
 
 bool CCommon::IsWindowsPath(const wstring& str)
@@ -566,14 +763,13 @@ bool CCommon::IsWindowsPath(const wstring& str)
 
 bool CCommon::IsPath(const wstring& str)
 {
-    if (str.size() < 2)		//只有1个字符不是一个路径
+    if (str.size() < 3)
         return false;
 
     bool is_windows_path{ IsWindowsPath(str) };
+    bool is_UNC_path{ str[0] == L'\\' && str[1] == L'\\' };
 
-    bool is_linux_path{ str[0] == L'/' || str[0] == L'\\' };
-
-    if (!is_windows_path && !is_linux_path)
+    if (!is_windows_path && !is_UNC_path)
         return false;
 
     const wstring invalid_chars{ L":*?\"<>|" };
@@ -597,11 +793,19 @@ bool CCommon::StringCharacterReplace(wstring& str, wchar_t ch, wchar_t ch_replac
     return replaced;
 }
 
-void CCommon::StringReplace(wstring& str, const wstring& str_old, const wstring& str_new)
+bool CCommon::StringReplace(wstring& str, const wstring& str_old, const wstring& str_new)
 {
-    CString _str{ str.c_str() };
-    _str.Replace(str_old.c_str(), str_new.c_str());
-    str = _str.GetString();
+    if (str.empty())
+        return false;
+    bool replaced{ false };
+    size_t pos = 0;
+    while ((pos = str.find(str_old, pos)) != std::wstring::npos)
+    {
+        str.replace(pos, str_old.length(), str_new);
+        replaced = true;
+        pos += str_new.length();    // 前进到替换后的字符串末尾
+    }
+    return replaced;
 }
 
 CString CCommon::DataSizeToString(size_t data_size)
@@ -645,9 +849,9 @@ wstring CCommon::GetTemplatePath()
 {
     wstring result;
     wchar_t buff[MAX_PATH];
-    GetTempPath(MAX_PATH, buff);		//获取临时文件夹的路径
+    GetTempPath(MAX_PATH, buff);        //获取临时文件夹的路径
     result = buff;
-    if (!result.empty() && result.back() != L'\\' && result.back() != L'/')		//确保路径后面有斜杠
+    if (!result.empty() && result.back() != L'\\' && result.back() != L'/')     //确保路径后面有斜杠
         result.push_back(L'\\');
     return result;
 }
@@ -666,6 +870,9 @@ wstring CCommon::GetAppDataConfigDir()
     CreateDirectory(app_data_path.c_str(), NULL);       //如果Roaming不存在，则创建它
     app_data_path += L'\\';
     app_data_path += APP_NAME;
+#ifdef _DEBUG
+    app_data_path += L" (Debug)";
+#endif
     app_data_path += L'\\';
     CreateDirectory(app_data_path.c_str(), NULL);       //如果C:/User/用户名/AppData/Roaming/MusicPlayer2不存在，则创建它
 
@@ -674,117 +881,18 @@ wstring CCommon::GetAppDataConfigDir()
 
 wstring CCommon::GetSpecialDir(int csidl)
 {
+    bool rtn{};
     LPITEMIDLIST ppidl;
-    TCHAR folder_dir[MAX_PATH];
+    wchar_t folder_dir[MAX_PATH];
     if (SHGetSpecialFolderLocation(NULL, csidl, &ppidl) == S_OK)
     {
-        SHGetPathFromIDList(ppidl, folder_dir);
+        rtn = SHGetPathFromIDListW(ppidl, folder_dir);
         CoTaskMemFree(ppidl);
     }
-    return wstring(folder_dir);
-}
-
-//int CCommon::GetListWidth(CListBox & list)
-//{
-//	CDC *pDC = list.GetDC();
-//	if (NULL == pDC)
-//	{
-//		return 0;
-//	}
-//	int nCount = list.GetCount();
-//	if (nCount < 1)
-//		return 0;
-//	int nMaxExtent = 0;
-//	CString szText;
-//	for (int i = 0; i < nCount; ++i)
-//	{
-//		list.GetText(i, szText);
-//		CSize &cs = pDC->GetTextExtent(szText);
-//		if (cs.cx > nMaxExtent)
-//		{
-//			nMaxExtent = cs.cx;
-//		}
-//	}
-//	return nMaxExtent;
-//}
-
-
-int CCommon::DeleteAFile(HWND hwnd, _tstring file)
-{
-    file.push_back(_T('\0'));	//pFrom必须以两个\0结尾
-    LPCTSTR strTitle = CCommon::LoadText(IDS_DELETE);	//文件删除进度对话框标题
-    SHFILEOPSTRUCT FileOp{};	//定义SHFILEOPSTRUCT结构对象
-    FileOp.hwnd = hwnd;
-    FileOp.wFunc = FO_DELETE;	//执行文件删除操作;
-    FileOp.pFrom = file.c_str();
-    FileOp.fFlags = FOF_ALLOWUNDO;	//此标志使删除文件备份到Windows回收站
-    FileOp.hNameMappings = NULL;
-    FileOp.lpszProgressTitle = strTitle;
-    return SHFileOperation(&FileOp);	//删除文件
-}
-
-int CCommon::DeleteFiles(HWND hwnd, const vector<_tstring>& files)
-{
-    _tstring file_list;
-    for (const auto& file : files)
-    {
-        file_list += file;
-        file_list.push_back(_T('\0'));
-    }
-    return DeleteAFile(hwnd, file_list);
-}
-
-int CCommon::CopyAFile(HWND hwnd, _tstring file_from, _tstring file_to)
-{
-    file_from.push_back(_T('\0'));	//pFrom必须以两个\0结尾
-    file_to.push_back(_T('\0'));	//pTo必须以两个\0结尾
-    SHFILEOPSTRUCT FileOp{};
-    FileOp.hwnd = hwnd;
-    FileOp.wFunc = FO_COPY;
-    FileOp.pFrom = file_from.c_str();
-    FileOp.pTo = file_to.c_str();
-    FileOp.fFlags = FOF_ALLOWUNDO;
-    FileOp.hNameMappings = NULL;
-    static CString str_title = LoadText(IDS_COPY);
-    FileOp.lpszProgressTitle = str_title;
-    return SHFileOperation(&FileOp);
-}
-
-int CCommon::CopyFiles(HWND hwnd, const vector<_tstring>& files, _tstring file_to)
-{
-    _tstring file_list;
-    for (const auto& file : files)
-    {
-        file_list += file;
-        file_list.push_back(_T('\0'));
-    }
-    return CopyAFile(hwnd, file_list, file_to);
-}
-
-int CCommon::MoveAFile(HWND hwnd, _tstring file_from, _tstring file_to)
-{
-    file_from.push_back(_T('\0'));	//pFrom必须以两个\0结尾
-    file_to.push_back(_T('\0'));	//pTo必须以两个\0结尾
-    SHFILEOPSTRUCT FileOp{};
-    FileOp.hwnd = hwnd;
-    FileOp.wFunc = FO_MOVE;
-    FileOp.pFrom = file_from.c_str();
-    FileOp.pTo = file_to.c_str();
-    FileOp.fFlags = FOF_ALLOWUNDO;
-    FileOp.hNameMappings = NULL;
-    FileOp.lpszProgressTitle = LoadText(IDS_MOVE);
-    return SHFileOperation(&FileOp);
-}
-
-int CCommon::MoveFiles(HWND hwnd, const vector<_tstring>& files, _tstring file_to)
-{
-    _tstring file_list;
-    for (const auto& file : files)
-    {
-        file_list += file;
-        file_list.push_back(_T('\0'));
-    }
-    return MoveAFile(hwnd, file_list, file_to);
+    ASSERT(rtn);
+    if (rtn)
+        return wstring(folder_dir);
+    return wstring();
 }
 
 bool CCommon::CreateDir(const _tstring& path)
@@ -834,7 +942,7 @@ _tstring CCommon::RelativePathToAbsolutePath(const _tstring& relative_path, cons
     // 否则将relative_path视为相对路径或斜杠开头的绝对路径并与cur_dir拼接
     _tstring result = relative_path;
     _tstring dir = cur_dir;
-    if (!IsWindowsPath(result) && !dir.empty())
+    if (!IsPath(result) && !dir.empty())
     {
         // https://docs.microsoft.com/en-us/windows/win32/api/shlwapi/
         // PathCombine拼接简化两个合法路径，当result为斜杠开头的绝对路径时将其只与dir的盘符拼接
@@ -895,42 +1003,42 @@ void CCommon::WriteLog(const wchar_t* path, const wstring& content)
         cur_time.wHour, cur_time.wMinute, cur_time.wSecond, cur_time.wMilliseconds);
     ofstream out_put{ path, std::ios::app };
     out_put << buff << CCommon::UnicodeToStr(content, CodeType::UTF8_NO_BOM) << std::endl;
+    out_put.close();    // 这里需要显式关闭以避免被不同线程连续调用时丢失内容（不过还是不能承受并发，多线程并发时请自行加锁
 }
 
-wstring CCommon::DisposeCmdLineFiles(const wstring& cmd_line, vector<wstring>& files)
+void CCommon::DisposeCmdLineFiles(const wstring& cmd_line, vector<wstring>& files)
 {
+    // 解析命令行参数中的文件/文件夹路径放入files
+    // files 中能够接受音频文件路径/播放列表文件路径/文件夹路径随意乱序出现
+    // files 中无法被识别为“播放列表文件路径”“文件夹路径”的项目会被直接加入默认播放列表
+    // TODO: 这里可能需要添加以下功能，我没有其他windows版本的经验，不确定这里怎样改
+    //       文件/文件夹存在判断；路径通配符展开；相对路径转换绝对路径；支持不在同一文件夹下的多个文件路径
     files.clear();
-    if (cmd_line.empty()) return wstring();
+    if (cmd_line.empty()) return;
     wstring path;
     //先找出字符串中的文件夹路径，从命令行参数传递过来的文件肯定都是同一个文件夹下的
-    if (cmd_line[0] == L'\"')		//如果第一个文件用双引号包含起来
+    if (cmd_line[0] == L'\"')       //如果第一个文件用双引号包含起来
     {
-        int index1 = cmd_line.find(L'\"', 1);		//查找和第1个双引号匹配的双引号
-        int index2 = cmd_line.rfind(L'\\', index1);		//往前查找反斜杠
-        path = cmd_line.substr(1, index2);		//获取文件夹路径（包含最后一个反斜杠）
+        int index1 = cmd_line.find(L'\"', 1);       //查找和第1个双引号匹配的双引号
+        int index2 = cmd_line.rfind(L'\\', index1);     //往前查找反斜杠
+        path = cmd_line.substr(1, index2);      //获取文件夹路径（包含最后一个反斜杠）
         files.push_back(cmd_line.substr(1, index1 - 1));
     }
-    else		//如果第一个文件没有用双引号包含起来，则说明路径中不包含空格，
+    else        //如果第一个文件没有用双引号包含起来，则说明路径中不包含空格，
     {
-        int index1 = cmd_line.find(L' ');		//查找和第1空格
-        int index2 = cmd_line.rfind(L'\\', index1);		//往前查找反斜杠
-        path = cmd_line.substr(0, index2 + 1);		//获取文件夹路径（包含最后一个反斜杠）
+        int index1 = cmd_line.find(L' ');       //查找和第1空格
+        int index2 = cmd_line.rfind(L'\\', index1);     //往前查找反斜杠
+        path = cmd_line.substr(0, index2 + 1);      //获取文件夹路径（包含最后一个反斜杠）
         files.push_back(cmd_line.substr(0, index1));
     }
     int path_size = path.size();
-    if (path_size < 2) return wstring();
-    if (IsFolder(files[0]))
-        //if (files[0].size() > 4 && files[0][files[0].size() - 4] != L'.' && files[0][files[0].size() - 5] != L'.')
-    {
-        //如果第1个文件不是文件而是文件夹，则返直接回该文件夹的路径
-        return files[0];
-    }
+    if (path_size < 2) return;
     int index{};
     while (true)
     {
-        index = cmd_line.find(path, index + path_size);		//从第2个开始查找路径出现的位置
+        index = cmd_line.find(path, index + path_size);     //从第2个开始查找路径出现的位置
         if (index == string::npos) break;
-        if (index > 0 && cmd_line[index - 1] == L'\"')		//如果路径前面一个字符是双引号
+        if (index > 0 && cmd_line[index - 1] == L'\"')      //如果路径前面一个字符是双引号
         {
             int index1 = cmd_line.find(L'\"', index);
             files.push_back(cmd_line.substr(index, index1 - index));
@@ -941,7 +1049,7 @@ wstring CCommon::DisposeCmdLineFiles(const wstring& cmd_line, vector<wstring>& f
             files.push_back(cmd_line.substr(index, index1 - index));
         }
     }
-    return wstring();
+    return;
     //CString out_info;
     //out_info += _T("命令行参数：");
     //out_info += cmd_line.c_str();
@@ -997,9 +1105,9 @@ bool CCommon::CreateFileShortcut(LPCTSTR lpszLnkFileDir, LPCTSTR lpszFileName, L
         return false;
     }
 
-    TCHAR file_path[MAX_PATH];		//当前进程exe文件路径
+    TCHAR file_path[MAX_PATH];      //当前进程exe文件路径
     GetModuleFileName(NULL, file_path, MAX_PATH);
-    LPCTSTR pFilePath;				//快捷方式目标
+    LPCTSTR pFilePath;              //快捷方式目标
 
     //目标
     if (lpszFileName == NULL)
@@ -1168,8 +1276,8 @@ bool CCommon::FileIsImage(const wstring& file_name)
     index = file_name.find_last_of(L'.');
     wstring type;
     if (index != string::npos)
-        type = file_name.substr(index);			//获取扩展名
-    std::transform(type.begin(), type.end(), type.begin(), tolower);		//将扩展名转换成小写
+        type = file_name.substr(index);         //获取扩展名
+    std::transform(type.begin(), type.end(), type.begin(), tolower);        //将扩展名转换成小写
     return (type == L".jpg" || type == L".jpeg" || type == L".png" || type == L".gif" || type == L".bmp");
 }
 
@@ -1177,12 +1285,12 @@ wstring CCommon::GetRandomString(int length)
 {
     wstring result;
     SYSTEMTIME current_time;
-    GetLocalTime(&current_time);			//获取当前时间
-    srand(current_time.wMilliseconds);		//用当前时间的毫秒数设置产生随机数的种子
-    int char_type;		//当前要生成的字符类型 0：数字；1：小写字母；2：大写字母
+    GetLocalTime(&current_time);            //获取当前时间
+    srand(current_time.wMilliseconds);      //用当前时间的毫秒数设置产生随机数的种子
+    int char_type;      //当前要生成的字符类型 0：数字；1：小写字母；2：大写字母
     for (int i{}; i < length; i++)
     {
-        char_type = rand() % 3;		//随机确定要生成的字符类型
+        char_type = rand() % 3;     //随机确定要生成的字符类型
         wchar_t current_char;
         switch (char_type)
         {
@@ -1209,11 +1317,11 @@ bool CCommon::IsFileNameNumbered(const wstring& file_name, int& number, size_t& 
         return false;
     size_t size{ file_name.size() };
     //size_t index;
-    index = file_name.rfind(L'(');		//往前查找右括号
-    if (index == wstring::npos || index == 0)		//左括号不能在字符串开头
+    index = file_name.rfind(L'(');      //往前查找右括号
+    if (index == wstring::npos || index == 0)       //左括号不能在字符串开头
         return false;
-    wstring number_str{ file_name.substr(index + 1, size - index - 2) };		//获取两个括号之间的文本
-    if (StrIsNumber(number_str))				//判断文本是否是数字
+    wstring number_str{ file_name.substr(index + 1, size - index - 2) };        //获取两个括号之间的文本
+    if (StrIsNumber(number_str))                //判断文本是否是数字
     {
         number = _wtoi(number_str.c_str());
         return true;
@@ -1226,8 +1334,8 @@ bool CCommon::IsFileNameNumbered(const wstring& file_name, int& number, size_t& 
 
 void CCommon::SizeZoom(CSize& size, int side)
 {
-    float width_height_ratio{ static_cast<float>(size.cx) / size.cy };	//长宽比
-    if (width_height_ratio > 1)		//长宽比大于1：1
+    float width_height_ratio{ static_cast<float>(size.cx) / size.cy };  //长宽比
+    if (width_height_ratio > 1)     //长宽比大于1：1
     {
         size.cx = side;
         size.cy = static_cast<int>(side / width_height_ratio);
@@ -1337,59 +1445,79 @@ int CCommon::GetMenuItemPosition(CMenu* pMenu, UINT id)
     return pos;
 }
 
-CString CCommon::LoadText(UINT id, LPCTSTR back_str)
+void CCommon::IterateMenuItem(CMenu* pMenu, std::function<void(CMenu*, UINT)> func)
 {
-    CString str;
-    str.LoadString(id);
-    if (back_str != nullptr)
-        str += back_str;
-    return str;
-}
-
-CString CCommon::LoadText(LPCTSTR front_str, UINT id, LPCTSTR back_str)
-{
-    CString str;
-    str.LoadString(id);
-    if (back_str != nullptr)
-        str += back_str;
-    if (front_str != nullptr)
-        str = front_str + str;
-    return str;
-}
-
-CString CCommon::StringFormat(LPCTSTR format_str, const std::initializer_list<CVariant>& paras)
-{
-    CString str_rtn = format_str;
-    int index = 1;
-    for (const auto& para : paras)
+    if (pMenu != nullptr)
     {
-        CString para_str = para.ToString();
-        CString format_para;
-        format_para.Format(_T("<%%%d%%>"), index);
-        str_rtn.Replace(format_para, para_str);
-
-        index++;
+        int item_count = pMenu->GetMenuItemCount();
+        for (int i = 0; i < item_count; i++)
+        {
+            CMenu* pSubMenu = pMenu->GetSubMenu(i);
+            if (pSubMenu != nullptr)
+                IterateMenuItem(pSubMenu, func);
+            UINT id = pMenu->GetMenuItemID(i);
+            if (id > 0)
+                func(pMenu, id);
+        }
     }
-    return str_rtn;
 }
 
-CString CCommon::LoadTextFormat(UINT id, const std::initializer_list<CVariant>& paras)
+bool CCommon::StringLeftMatch(const std::wstring& str, const std::wstring& matched_str)
 {
-    CString str;
-    str.LoadString(id);
-    return StringFormat(str.GetString(), paras);
+    if (str.size() < matched_str.size())
+        return false;
+    return str.substr(0, matched_str.size()) == matched_str;
 }
 
-
-void CCommon::SetThreadLanguage(Language language)
+bool CCommon::GetThreadLanguageList(vector<wstring>& language_tag)
 {
-    switch (language)
+    language_tag.clear();
+    ULONG num{};
+    vector<wchar_t> buffer(LOCALE_NAME_MAX_LENGTH, L'\0');
+    ULONG buffer_size{ static_cast<ULONG>(buffer.size()) };
+    bool rtn = GetThreadPreferredUILanguages(MUI_LANGUAGE_NAME, &num, buffer.data(), &buffer_size); // >=Windows Vista
+    if (!rtn) return false;
+    ASSERT(buffer_size <= LOCALE_NAME_MAX_LENGTH);
+    size_t pos{};
+    for (size_t i{}; i < buffer_size; ++i)
     {
-    case Language::ENGLISH: SetThreadUILanguage(MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US)); break;
-    case Language::SIMPLIFIED_CHINESE: SetThreadUILanguage(MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED)); break;
-        //case Language::TRADITIONAL_CHINESE: SetThreadUILanguage(MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_TRADITIONAL)); break;
-    default: break;
+        if (buffer[i] != L'\0' || pos == i)
+            continue;
+        wstring tmp(buffer.begin() + pos, buffer.begin() + i);
+        language_tag.push_back(tmp);
+        pos = i + 1;
     }
+    ASSERT(language_tag.size() == num);
+    return true;
+}
+
+bool CCommon::SetThreadLanguageList(const vector<wstring>& language_tag)
+{
+    vector<wchar_t> buffer;
+    size_t buffer_size{ 1 };
+    for (const wstring& tag : language_tag)
+    {
+        if (tag.empty()) continue;
+        buffer_size += tag.size() + 1;
+        if (buffer_size > LOCALE_NAME_MAX_LENGTH)
+            break;
+        buffer.insert(buffer.end(), tag.begin(), tag.end());
+        buffer.push_back(L'\0');
+    }
+    if (buffer.empty()) // buffer为空时多插入一个\0确保双\0结尾（空buffer会重置之前设置的线程首选UI语言列表）
+        buffer.push_back(L'\0');
+    buffer.push_back(L'\0');
+    bool rtn = SetThreadPreferredUILanguages(MUI_LANGUAGE_NAME, buffer.data(), nullptr); // >=Windows Vista
+    return rtn;
+}
+
+wstring CCommon::GetSystemDefaultUIFont()
+{
+    NONCLIENTMETRICS metrics;
+    metrics.cbSize = sizeof(NONCLIENTMETRICS);
+    SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &metrics, 0);
+    wstring font_name = metrics.lfMessageFont.lfFaceName;
+    return font_name;
 }
 
 void CCommon::WStringCopy(wchar_t* str_dest, int dest_size, const wchar_t* str_source, int source_size)
@@ -1498,7 +1626,7 @@ int CCommon::IconSizeNormalize(int size)
 {
     //查找标准图标大小列表中和指定大小最接近的一个，然后将其返回
 
-    const vector<int> standard_size{ 16, 20, 24, 32, 48, 64, 128, 256, 512 };
+    const vector<int> standard_size{ 16, 20, 24, 28, 32, 48, 64, 128, 256, 512 };
     int min_diff = MAXINT;
     int index = 0;
     for (size_t i = 0; i < standard_size.size(); i++)
@@ -1528,14 +1656,14 @@ bool CCommon::StringIsVersion(LPCTSTR str)
     return (version_str.GetLength() == 4 || version_str.GetLength() == 5) && version_str[1] == _T('.') && CharIsNumber(version_str[0]) && CharIsNumber(version_str[2]) && CharIsNumber(version_str[3]);
 }
 
-bool CCommon::GetFileContent(const wchar_t* file_path, string& contents_buff, bool binary, size_t max_size)
+bool CCommon::GetFileContent(const wchar_t* file_path, string& contents_buff, size_t max_size)
 {
-    std::ifstream file{ file_path, (binary ? std::ios::binary : std::ios::in) };
+    std::ifstream file{ file_path, std::ios::binary | std::ios::in };
     if (file.fail())
         return false;
     //获取文件长度
     file.seekg(0, file.end);
-    size_t length = file.tellg();
+    unsigned int length{ static_cast<unsigned int>(file.tellg()) };
     file.seekg(0, file.beg);
 
     char* buff = new char[length];
@@ -1556,7 +1684,7 @@ const char* CCommon::GetFileContent(const wchar_t* file_path, size_t& length)
         return nullptr;
     //获取文件长度
     file.seekg(0, file.end);
-    length = file.tellg();
+    length = static_cast<size_t>(file.tellg());
     file.seekg(0, file.beg);
 
     char* buff = new char[length];
@@ -1569,9 +1697,10 @@ const char* CCommon::GetFileContent(const wchar_t* file_path, size_t& length)
 bool CCommon::SaveDataToFile(const string& data, const wstring& file_path)
 {
     ofstream out_put{ file_path, std::ios::binary };
-    if (out_put.fail())
+    if (!out_put.is_open())
         return false;
-    out_put << data;
+    if (!data.empty())
+        out_put << data;
     out_put.close();
     return true;
 }
@@ -1619,18 +1748,18 @@ void CCommon::FileAutoRename(wstring& file_path)
     while (CCommon::FileExist(file_path))
     {
         //判断文件名的末尾是否符合“(数字)”的形式
-        wstring file_name;		//文件名（不含扩展名）
+        wstring file_name;      //文件名（不含扩展名）
         CFilePathHelper c_file_path(file_path);
         file_name = c_file_path.GetFileNameWithoutExtension();
         wstring ext{ c_file_path.GetFileExtension() };
         int num;
         size_t index;
-        bool is_numbered{ CCommon::IsFileNameNumbered(file_name, num, index) };		//文件名的末尾是否符合“(数字)”的形式
-        if (!is_numbered)		//如果文件名末尾没有“(数字)”，则在末尾添加“ (1)”
+        bool is_numbered{ CCommon::IsFileNameNumbered(file_name, num, index) };     //文件名的末尾是否符合“(数字)”的形式
+        if (!is_numbered)       //如果文件名末尾没有“(数字)”，则在末尾添加“ (1)”
         {
             file_name += L" (1)";
         }
-        else		//否则，将原来的数字加1
+        else        //否则，将原来的数字加1
         {
             file_name = file_name.substr(0, index);
             CString num_str;
@@ -1645,7 +1774,7 @@ void CCommon::FileAutoRename(wstring& file_path)
 int CCommon::StringCompareInLocalLanguage(const wstring& str1, const wstring& str2, bool no_case)
 {
 #ifndef COMPILE_IN_WIN_XP
-    int rtn = CompareStringEx(LOCALE_NAME_USER_DEFAULT, (no_case ? NORM_IGNORECASE : 0), str1.c_str(), str1.size(), str2.c_str(), str2.size(), NULL, NULL, 0);
+    int rtn = CompareStringEx(LOCALE_NAME_USER_DEFAULT, (no_case ? NORM_IGNORECASE : 0) | SORT_DIGITSASNUMBERS, str1.c_str(), str1.size(), str2.c_str(), str2.size(), NULL, NULL, 0);
 #else
     int rtn = CompareString(LOCALE_NAME_USER_DEFAULT, (no_case ? NORM_IGNORECASE : 0), str1.c_str(), str1.size(), str2.c_str(), str2.size());
 #endif
@@ -1674,79 +1803,97 @@ bool CCommon::GetNumberBit(unsigned short num, int bit)
     return (num & (1 << bit)) != 0;
 }
 
-CString CCommon::GetTextResource(UINT id, CodeType code_type)
+std::string CCommon::GetTextResourceRawData(UINT id)
 {
-    CString res_str;
-    HRSRC hRes = FindResource(NULL, MAKEINTRESOURCE(id), _T("TEXT"));
-    if (hRes != NULL)
+    std::string res_data;
+    HINSTANCE hInstance = AfxGetResourceHandle();
+    HRSRC hRsrc = FindResource(NULL, MAKEINTRESOURCE(id), _T("TEXT"));
+    if (hRsrc != NULL)
     {
-        HGLOBAL hglobal = LoadResource(NULL, hRes);
-        if (hglobal != NULL)
+        HGLOBAL hGlobal = LoadResource(NULL, hRsrc);
+        if (hGlobal != NULL)
         {
-            if (code_type == CodeType::UTF16LE)
+            const char* pResource = static_cast<const char*>(LockResource(hGlobal));
+            if (pResource != NULL)
             {
-                res_str = (const wchar_t*)hglobal;
+                // 获取资源大小
+                DWORD dwSize = SizeofResource(hInstance, hRsrc);
+                // 将资源数据存储到std::string
+                return std::string(pResource, dwSize);
             }
-            else
-            {
-                res_str = CCommon::StrToUnicode((const char*)hglobal, code_type).c_str();
-            }
+            UnlockResource(hGlobal);
         }
     }
+    return res_data;
+}
+
+wstring CCommon::GetTextResource(UINT id, CodeType code_type)
+{
+    string res_data = GetTextResourceRawData(id);
+    wstring res_str = CCommon::StrToUnicode(res_data, code_type);
     return res_str;
 }
 
 Gdiplus::Image* CCommon::GetPngImageResource(UINT id)
 {
-    HINSTANCE hIns = AfxGetInstanceHandle();
-    HRSRC hRsrc = ::FindResource(hIns, MAKEINTRESOURCE(id), _T("PNG")); // type
-    if (!hRsrc)
-        return nullptr;
-    // load resource into memory
-    DWORD len = SizeofResource(hIns, hRsrc);
-    BYTE* lpRsrc = (BYTE*)LoadResource(hIns, hRsrc);
-    if (!lpRsrc)
-        return nullptr;
-    // Allocate global memory on which to create stream
-    HGLOBAL m_hMem = GlobalAlloc(GMEM_FIXED, len);
-    BYTE* pmem = (BYTE*)GlobalLock(m_hMem);
-    memcpy(pmem, lpRsrc, len);
-    IStream* pstm;
-    CreateStreamOnHGlobal(m_hMem, FALSE, &pstm);
-    // load from stream
-    Gdiplus::Image* lpImage = Gdiplus::Image::FromStream(pstm);
-    // free/release stuff
-    GlobalUnlock(m_hMem);
-    pstm->Release();
-    FreeResource(lpRsrc);
-    return lpImage;
+    Gdiplus::Image* pImage = nullptr;
+    HINSTANCE hInst = AfxGetResourceHandle();
+    if (HRSRC hRes = ::FindResource(hInst, MAKEINTRESOURCE(id), _T("PNG")))
+    {
+        DWORD imageSize = ::SizeofResource(hInst, hRes);
+        if (HGLOBAL hResData = ::LoadResource(hInst, hRes))
+        {
+            LPVOID pResourceData = ::LockResource(hResData);
+#ifdef COMPILE_IN_WIN_XP
+            if (HGLOBAL hBuffer = ::GlobalAlloc(GMEM_FIXED, imageSize))
+            {
+                ::CopyMemory(hBuffer, pResourceData, imageSize);
+                IStream* pStream = nullptr;
+                if (SUCCEEDED(::CreateStreamOnHGlobal(hBuffer, TRUE, &pStream)))
+                {
+                    pImage = Gdiplus::Image::FromStream(pStream);
+                    pStream->Release();
+                }
+                ::GlobalFree(hBuffer);  // 释放内存句柄
+            }
+#else       // 在缓冲区上创建内存流
+            if (IStream* pStream = SHCreateMemStream(static_cast<const BYTE*>(pResourceData), imageSize))
+            {
+                pImage = Gdiplus::Image::FromStream(pStream);
+                pStream->Release();
+            }
+#endif // COMPILE_IN_WIN_XP
+            ::FreeResource(hResData);
+        }
+    }
+    return pImage;
 }
 
 
 string CCommon::GetPngImageResourceData(UINT id)
 {
-    HINSTANCE hIns = AfxGetInstanceHandle();
-    HRSRC hRsrc = ::FindResource(hIns, MAKEINTRESOURCE(id), _T("PNG")); // type
-    if (!hRsrc)
-        return nullptr;
-    // load resource into memory
-    DWORD len = SizeofResource(hIns, hRsrc);
-    BYTE* lpRsrc = (BYTE*)LoadResource(hIns, hRsrc);
-    if (!lpRsrc)
-        return nullptr;
-    string data((const char*)lpRsrc, len);
-    FreeResource(lpRsrc);
+    string data;
+    HINSTANCE hInst = AfxGetResourceHandle();
+    if (HRSRC hRes = ::FindResource(hInst, MAKEINTRESOURCE(id), _T("PNG")))
+    {
+        DWORD imageSize = ::SizeofResource(hInst, hRes);
+        if (HGLOBAL hResData = ::LoadResource(hInst, hRes))
+        {
+            LPVOID pResourceData = ::LockResource(hResData);
+            data = string(static_cast<const char*>(pResourceData), imageSize);
+            ::FreeResource(hResData);
+        }
+    }
     return data;
 }
 
 int CCommon::Random(int min, int max)
 {
     std::random_device rd;
-    std::default_random_engine engine{ rd() };
-    std::uniform_int_distribution<> dis{ min, max - 1 };
-    auto dice = std::bind(dis, engine);
-    int _rand = dice();
-    return _rand;
+    std::mt19937 engine(rd());
+    std::uniform_int_distribution<int> dis(min, max - 1);
+    int dis_{ dis(engine) };
+    return dis_;
 }
 
 CString CCommon::GetDesktopBackgroundPath()
@@ -1795,12 +1942,37 @@ POINT CCommon::CalculateWindowMoveOffset(CRect& check_rect, vector<CRect>& scree
     return mov;
 }
 
-CString CCommon::GetLastCompileTime()
+void CCommon::RestrictRectRange(CRect& rect, const CRect& rect_range)
 {
-    CString compile_time = GetTextResource(IDR_COMPILE_TIME, CodeType::ANSI);
-    compile_time.Replace(_T("\r\n"), _T(""));
-    compile_time.Delete(compile_time.GetLength() - 1, 1);
-    return compile_time;
+    //如果矩形的宽高超过了范围
+    if (rect.Width() > rect_range.Width())
+    {
+        rect.left = rect_range.left;
+        rect.right = rect_range.right;
+    }
+    if (rect.Height() > rect_range.Height())
+    {
+        rect.top = rect_range.top;
+        rect.bottom = rect_range.bottom;
+    }
+    //限制矩形的范围
+    if (rect.left < rect_range.left)
+        rect.MoveToX(rect_range.left);
+    if (rect.right > rect_range.right)
+        rect.MoveToX(rect_range.right - rect.Width());
+    if (rect.top < rect_range.top)
+        rect.MoveToY(rect_range.top);
+    if (rect.bottom > rect_range.bottom)
+        rect.MoveToY(rect_range.bottom - rect.Height());
+}
+
+void CCommon::GetLastCompileTime(wstring& time_str, wstring& hash_str)
+{
+    wstring compile_time = GetTextResource(IDR_COMPILE_TIME, CodeType::ANSI);
+    size_t pos = compile_time.find(L"\r\n");
+    time_str = compile_time.substr(0, pos);
+    if (compile_time.size() > pos + 10)                 // 如果hash存在
+        hash_str = compile_time.substr(pos + 2, 8);     // 截取hash前8位
 }
 
 unsigned __int64 CCommon::GetCurTimeElapse()
@@ -1808,5 +1980,50 @@ unsigned __int64 CCommon::GetCurTimeElapse()
     SYSTEMTIME sys_time;
     GetLocalTime(&sys_time);
     CTime cur_time(sys_time);
-    return cur_time.GetTime();
+    unsigned __int64 c_time = cur_time.GetTime();
+    static unsigned __int64 last_time{};
+    // 此处用作排序时间戳，需要避免重复
+    last_time = (last_time < c_time) ? c_time : (last_time + 1);
+    return last_time;
+}
+
+wstring CCommon::EncodeURIComponent(wstring uri) {
+    StrReplace(uri, L"%", L"%25");
+    StrReplace(uri, L":", L"%3A");
+    StrReplace(uri, L"/", L"%2F");
+    StrReplace(uri, L"?", L"%3F");
+    StrReplace(uri, L"#", L"%23");
+    StrReplace(uri, L"[", L"%5B");
+    StrReplace(uri, L"]", L"%5D");
+    StrReplace(uri, L"@", L"%40");
+    StrReplace(uri, L"$", L"%24");
+    StrReplace(uri, L"&", L"%26");
+    StrReplace(uri, L"+", L"%2B");
+    StrReplace(uri, L",", L"%2C");
+    StrReplace(uri, L";", L"%3B");
+    StrReplace(uri, L"=", L"%3D");
+    return uri;
+}
+
+void CCommon::OutputDebugStringFormat(LPCTSTR str, ...)
+{
+    va_list args;
+    va_start(args, str);
+    TCHAR buf[1024] = { 0 };
+    StringCchVPrintf(buf, 1023, str, args);
+    va_end(args);
+    buf[1023] = L'\0';
+    OutputDebugString(buf);
+}
+
+wstring CCommon::StrReplace(wstring& input, wstring pattern, wstring new_content) {
+    auto loc = input.find(pattern, 0);
+    auto len = pattern.length();
+    auto len2 = new_content.length();
+    while (loc != -1) {
+        input.replace(loc, len, new_content);
+        if (loc + len2 < input.length()) loc = input.find(pattern, max(0, loc + len2));
+        else break;
+    }
+    return input;
 }

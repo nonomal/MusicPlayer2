@@ -2,6 +2,7 @@
 #include "MciCore.h"
 #include "AudioCommon.h"
 #include "MusicPlayer2.h"
+#include "FilePathHelper.h"
 
 
 CMciCore::CMciCore()
@@ -10,8 +11,8 @@ CMciCore::CMciCore()
 
     if (!IsSucceed())
     {
-        CString strInfo = CCommon::LoadText(IDS_MCI_INIT_FAILED);
-        theApp.WriteLog(wstring(strInfo));
+        const wstring& info = theApp.m_str_table.LoadText(L"LOG_MCI_INIT_FAILED");
+        theApp.WriteLog(info);
     }
 }
 
@@ -43,7 +44,7 @@ void CMciCore::InitCore()
     //向支持的文件列表插入原生支持的文件格式
     CAudioCommon::m_surpported_format.clear();
     SupportedFormat format;
-    format.description = CCommon::LoadText(IDS_BASIC_AUDIO_FORMAT);
+    format.description = theApp.m_str_table.LoadText(L"TXT_FILE_TYPE_BASE");
     format.extensions.push_back(L"mp3");
     format.extensions.push_back(L"wma");
     format.extensions.push_back(L"wav");
@@ -60,11 +61,6 @@ void CMciCore::UnInitCore()
     Close();
 }
 
-unsigned int CMciCore::GetHandle()
-{
-    return 0;
-}
-
 std::wstring CMciCore::GetAudioType()
 {
     return std::wstring();
@@ -76,6 +72,11 @@ int CMciCore::GetChannels()
 }
 
 int CMciCore::GetFReq()
+{
+    return 0;
+}
+
+int CMciCore::GetBitrate()
 {
     return 0;
 }
@@ -160,6 +161,20 @@ void CMciCore::SetSpeed(float speed)
 {
 }
 
+void CMciCore::SetPitch(int pitch)
+{
+}
+
+bool CMciCore::IsSpeedAvailable()
+{
+    return false;
+}
+
+bool CMciCore::IsPitchAvailable()
+{
+    return false;
+}
+
 bool CMciCore::SongIsOver()
 {
     return false;
@@ -210,41 +225,15 @@ void CMciCore::SetCurPosition(int position)
     }
 }
 
-void CMciCore::GetAudioInfo(SongInfo & song_info, int flag)
+void CMciCore::GetAudioInfo(const wchar_t* file_path, AudioInfo* audio_info, AudioTag* audio_tag)
 {
-    if (m_success)
-    {
-        if (flag&AF_LENGTH)
-            song_info.lengh = GetMciSongLength(song_info.file_path);
-        if (flag&AF_BITRATE)
-            song_info.bitrate = GetMciBitrate(song_info.file_path);
-        if (flag&AF_TAG_INFO)
-        {
-            CAudioTag audio_tag(song_info);
-            audio_tag.GetAudioTag();
-        }
-    }
-
-}
-
-void CMciCore::GetAudioInfo(const wchar_t * file_path, SongInfo & song_info, int flag)
-{
-    if (m_success && ((flag&AF_LENGTH) || (flag&AF_BITRATE)))
+    if (m_success && audio_info != nullptr)
     {
         m_error_code = mciSendStringW((L"open \"" + wstring(file_path) + L"\"").c_str(), NULL, 0, 0);
-        if (flag&AF_LENGTH)
-        {
-            wchar_t buff[16];
-            m_error_code = mciSendStringW((L"status \"" + wstring(file_path) + L"\" length").c_str(), buff, 15, 0);		//获取当前歌曲的长度，并储存在buff数组里
-            song_info.lengh = _wtoi(buff);
-        }
-        if (flag&AF_BITRATE)
-            song_info.bitrate = GetMciBitrate(file_path);
-        if (flag&AF_TAG_INFO)
-        {
-            CAudioTag audio_tag(song_info);
-            audio_tag.GetAudioTag();
-        }
+        wchar_t buff[16];
+        m_error_code = mciSendStringW((L"status \"" + wstring(file_path) + L"\" length").c_str(), buff, 15, 0);		//获取当前歌曲的长度，并储存在buff数组里
+        audio_info->length = _wtoi(buff);
+        audio_info->bitrate = GetMciBitrate(file_path);
 
         m_error_code = mciSendStringW((L"close \"" + wstring(file_path) + L"\"").c_str(), NULL, 0, 0);
     }
@@ -292,7 +281,7 @@ void CMciCore::ClearReverb()
 {
 }
 
-void CMciCore::GetFFTData(float fft_data[128])
+void CMciCore::GetFFTData(float fft_data[FFT_SAMPLE])
 {
     memset(fft_data, 0, sizeof(fft_data));
 }
@@ -316,9 +305,23 @@ std::wstring CMciCore::GetErrorInfo()
     return buff;
 }
 
-int CMciCore::GetDeviceCount()
+bool CMciCore::EncodeAudio(const std::wstring& src_file_path, const wstring& dest_file_path, EncodeFormat encode_format, void* encode_para, int dest_freq, EncodeAudioProc proc, int start_pos, int end_pos)
 {
-    return 0;
+    return false;
+}
+
+bool CMciCore::InitEncoder()
+{
+    return false;
+}
+
+void CMciCore::UnInitEncoder()
+{
+}
+
+bool CMciCore::IsFreqConvertAvailable()
+{
+    return false;
 }
 
 void CMciCore::GetMidiPosition()

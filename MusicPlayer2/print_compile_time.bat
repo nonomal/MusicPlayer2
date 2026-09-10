@@ -1,4 +1,18 @@
-REM 输出当前日期和时间，并保存到compile_time.txt文件中
-del /F /Q compile_time.txt
-echo %date:~0,10% >> compile_time.txt
-echo %time:~0,8% >> compile_time.txt
+@echo off
+setlocal
+
+:: Get formated date time by PowerShell.
+for /f "tokens=*" %%i in ('powershell -Command "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'"') do set "formatted_datetime=%%i"
+
+:: output to ompile_time.txt file.
+echo %formatted_datetime% > compile_time.txt
+
+:: Get the current Git commit hash (without showing error messages)
+for /f %%i in ('git rev-parse HEAD 2^>nul') do set commit_hash=%%i
+
+:: If the git command is executed successfully, the commit hash is appended to the compile_time.txt file.
+if not "%commit_hash%"=="" (
+    echo %commit_hash% >> compile_time.txt
+)
+
+endlocal

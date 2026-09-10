@@ -1,8 +1,6 @@
 ﻿#pragma once
 #include "LyricDownloadCommon.h"
-#include "afxcmn.h"
 #include "Lyric.h"
-#include "afxwin.h"
 #include "ListCtrlEx.h"
 #include "SongInfo.h"
 #include "BaseDialog.h"
@@ -57,11 +55,10 @@ public:
 
 protected:
     SongInfo m_song;       //要查找歌词的歌曲
-	wstring m_lyric_name;	        //保存的歌词文件的文件名（不含扩展名）
 	wstring m_lyric_dir;			//当前要保存的歌词文件的目录
 	wstring m_search_result;	//查找结果字符串
 	wstring m_lyric_str;	//下载的歌词
-	vector<CInternetCommon::ItemInfo> m_down_list;	//搜索结果的列表
+	vector<CLyricDownloadCommon::ItemInfo> m_down_list;	//搜索结果的列表
 
 	int m_item_selected{ -1 };		//搜索结果列表中选中的项目
 	bool m_download_translate{ false };
@@ -69,7 +66,6 @@ protected:
 	CodeType m_save_code{};		//保存的编码格式
 	int m_search_max_item{ 30 };		//查找歌曲时返回的最大数量
 
-	CMenu m_menu;
 	CListCtrlEx m_down_list_ctrl;
 	CButton m_download_translate_chk;
 	CComboBox m_save_code_combo;
@@ -81,14 +77,17 @@ protected:
 
 	void ShowDownloadList();		//将搜索结果显示出来
 	bool SaveLyric(const wchar_t* path, CodeType code_type);	//保存歌词
+    void SetID(wstring id);         // 保存指定id到媒体库内m_song.file_path对应条目
 
 	void SaveConfig() const;
 	void LoadConfig();
 
-    wstring GetSavedDir();
+	wstring GetLyricFileName();		//获取保存的歌词文件的文件名（不含扩展名）
+    wstring GetSavedDir() const;
     wstring GetSavedPath();
 
     virtual CString GetDialogName() const override;
+    virtual bool InitializeControls() override;
 
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
 

@@ -1,7 +1,7 @@
 ﻿#include "stdafx.h"
 #include "SpectralDataHelper.h"
 
-const int LINEAR_SAMPLE_COUNT{ 107 };
+const int LINEAR_SAMPLE_COUNT{ FFT_SAMPLE * 110 / 256 };
 
 CSpectralDataHelper::CSpectralDataHelper()
 {
@@ -15,7 +15,7 @@ CSpectralDataHelper::CSpectralDataHelper()
 
     for (int i{ LINEAR_SAMPLE_COUNT }; i < FFT_SAMPLE; i++)
     {
-        int m = std::log(i) / std::log(FFT_SAMPLE) * SPECTRUM_COL;
+        int m = static_cast<int>(std::log(i) / std::log(FFT_SAMPLE) * SPECTRUM_COL);
         if (m >= 0 && m < SPECTRUM_COL)
         {
             spectrum_map[i] = m;
@@ -24,7 +24,7 @@ CSpectralDataHelper::CSpectralDataHelper()
     }
 }
 
-void CSpectralDataHelper::SpectralDataMapOld(float fft_data[FFT_SAMPLE], float spectral_data[SPECTRUM_COL])
+void CSpectralDataHelper::SpectralDataMapOld(float fft_data[FFT_SAMPLE], float spectral_data[SPECTRUM_COL], int scale)
 {
     memset(spectral_data, 0, sizeof(float) * SPECTRUM_COL);
     for (int i{}; i < FFT_SAMPLE; i++)
@@ -36,11 +36,11 @@ void CSpectralDataHelper::SpectralDataMapOld(float fft_data[FFT_SAMPLE], float s
     {
         spectral_data[i] /= (FFT_SAMPLE / SPECTRUM_COL);
         spectral_data[i] = std::sqrtf(spectral_data[i]);		//对每个频谱柱形的值取平方根，以减少不同频率频谱值的差异
-        spectral_data[i] *= 60;			//调整这里的乘数可以调整频谱分析柱形图整体的高度
+        spectral_data[i] *= scale;
     }
 }
 
-void CSpectralDataHelper::SpectralDataMap(float fft_data[FFT_SAMPLE], float spectral_data[SPECTRUM_COL])
+void CSpectralDataHelper::SpectralDataMap(float fft_data[FFT_SAMPLE], float spectral_data[SPECTRUM_COL], int scale)
 {
     memset(spectral_data, 0, sizeof(float) * SPECTRUM_COL);
     for (int i{}; i < FFT_SAMPLE; i++)
@@ -52,6 +52,19 @@ void CSpectralDataHelper::SpectralDataMap(float fft_data[FFT_SAMPLE], float spec
     {
         spectral_data[i] = spectral_data[i] / spectrum_map_count[i];
         spectral_data[i] = std::sqrtf(spectral_data[i]);		//对每个频谱柱形的值取平方根，以减少不同频率频谱值的差异
-        spectral_data[i] *= 60;			//调整这里的乘数可以调整频谱分析柱形图整体的高度
+        spectral_data[i] *= scale;
     }
+}
+
+float CSpectralDataHelper::CalculateCompressedSpectralData(const float spectral_data[SPECTRUM_COL], int index, int col_num)
+{
+    float spetral_data = 0;
+    int COL_MIN{ SPECTRUM_COL / col_num * index };
+    int COL_MAX{ SPECTRUM_COL / col_num * (index + 1) };
+    for (int i = COL_MIN; i < COL_MAX; i++)
+    {
+        spetral_data += spectral_data[i];
+    }
+    spetral_data /= (SPECTRUM_COL / col_num);
+    return spetral_data;
 }

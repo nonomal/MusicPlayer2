@@ -3,11 +3,8 @@
 //
 
 #pragma once
-#include "afxwin.h"
-#include "afxcmn.h"
-//#include"Player.h"
 #include"PlayListCtrl.h"
-#include"FindDlg.h"
+#include "FindContainerDlg.h"
 #include"OptionsDlg.h"
 #include"PropertyDlg.h"
 #include"ColorConvert.h"
@@ -15,14 +12,11 @@
 #include"LyricEditDlg.h"
 #include "LyricDownloadDlg.h"
 #include "LyricBatchDownloadDlg.h"
-//#include "EqualizerDlg.h"
 #include "SoundEffectDlg.h"
 #include "CortanaLyric.h"
 #include "FilePathHelper.h"
-#include "CoverDownloadCommon.h"
 #include "CoverDownloadDlg.h"
 #include "FormatConvertDlg.h"
-#include "RecorderDlg.h"
 #include "CNotifyIcon.h"
 #include "StaticEx.h"
 #include "CMainDialogBase.h"
@@ -33,8 +27,13 @@
 #include "UIWindow.h"
 #include "CDevicesManager.h"
 #include "MenuEditCtrl.h"
+#include "HorizontalSplitter.h"
+#include "powrprof.h"
+#include "CHotkeyManager.h"
+#include "ListCache.h"
+#include "ProcessMsgHelper.h"
 
-#define WM_ALBUM_COVER_DOWNLOAD_COMPLETE (WM_USER+114)		//自动下载专辑封面和歌词完成时发出的消息
+#define WM_ALBUM_COVER_DOWNLOAD_COMPLETE (WM_USER+114)      //自动下载专辑封面和歌词完成时发出的消息
 
 // CMusicPlayerDlg 对话框
 class CMusicPlayerDlg : public CMainDialogBase
@@ -42,14 +41,24 @@ class CMusicPlayerDlg : public CMainDialogBase
 
     // 构造
 public:
-    CMusicPlayerDlg(wstring cmdLine = wstring(), CWnd* pParent = NULL);	// 标准构造函数
+    CMusicPlayerDlg(wstring cmdLine = wstring(), CWnd* pParent = NULL); // 标准构造函数
     ~CMusicPlayerDlg();
 
-    bool IsTaskbarListEnable() const;
+    static CMusicPlayerDlg* GetInstance();
+
+    HACCEL GetAccel() const { return m_hAccel; }
+    CCortanaLyric& GetCortanaLyric() { return m_cortana_lyric; }
 
     friend class CMusicPlayerCmdHelper;
     friend class CUIWindow;
     friend class CPlayerUIBase;
+
+    CUIWindow& GetUIWindow() { return m_ui_static_ctrl; }
+    bool IsMiniMode() const;
+    CMiniModeDlg* GetMinimodeDlg();
+    void UiForceRefresh();      //通知UI线程强制刷新一次
+    int GetUiRefreshInterval() const { return m_ui_refresh_interval; }
+    void MouseWheelAdjustVolume(short zDelta);
 
     // 对话框数据
 #ifdef AFX_DESIGN_TIME
@@ -57,76 +66,91 @@ public:
 #endif
 
 protected:
-    virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
+    virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
 
 public:
     CMenu* m_pCurMenu{};       //当前弹出的菜单
 
-// 实现
+    // 为主窗口停靠播放列表部分控件显示缓存当前ListItem，与控件显示状态应总是保持同步
+    // 主线程可以从这里取得当前ListItem，***限制此对象仅能在主线程使用***
+    CListCache m_current_cache;
+    // 为“最近播放”菜单缓存ListItem，总是与MenuMgr::RecentFolderPlaylistMenu一致
+    // 主线程可以从这里获取此菜单当前内容数据，***限制此对象仅能在主线程使用***
+    CListCache m_recent_cache;
+    // 为“添加到播放列表”菜单缓存ListItem，总是与MenuMgr::AddToPlaylistMenu一致
+    // 主线程可以从这里获取此菜单当前内容数据，***限制此对象仅能在主线程使用***
+    CListCache m_playlist_cache;
+
 protected:
     HICON m_hIcon;
-    CToolTipCtrl m_Mytip;
     //控件变量
-    CPlayListCtrl m_playlist_list{ CPlayer::GetInstance().GetPlayList() };		//播放列表控件(初始化时通过构造函数传递歌曲信息的引用，
-    //用于支持鼠标指向列表中的项目时显示歌曲信息)
+
+    CUIWindow m_ui_static_ctrl{ m_pUI };
+    CHorizontalSplitter m_splitter_ctrl;
     CStaticEx m_path_static;
     CMenuEditCtrl m_path_edit;
-    CButton m_set_path_button;
+    CButton m_media_lib_button;
     CSearchEditCtrl m_search_edit;
-    //CButton m_clear_search_button;
-    CUIWindow m_ui_static_ctrl{ m_pUI };
+    CPlayerToolBar m_playlist_toolbar;
+    //播放列表控件(初始化时通过构造函数传递歌曲信息的引用，用于支持鼠标指向列表中的项目时显示歌曲信息）
+    CPlayListCtrl m_playlist_list{ CPlayer::GetInstance().GetPlayList() };
+
+    CToolTipCtrl m_tool_tip;
 
 #ifndef COMPILE_IN_WIN_XP
-    ITaskbarList3* m_pTaskbar{ theApp.GetITaskbarList3() };         //用于支持任务栏显示播放进度
     THUMBBUTTON m_thumbButton[3]{};
 #endif
 
-    CFindDlg m_findDlg;		//查找对话框
-    HACCEL m_hAccel;
+    CHotkeyManager m_hot_key;
+    CFindContainerDlg m_findDlg;        //查找对话框
+    HACCEL m_hAccel{};
 
-    wstring m_cmdLine;	//命令行参数
+    wstring m_cmdLine;  //命令行参数
+    std::mutex m_cmd_open_files_mutx;   // 保护m_cmd_open_files的线程同步对象
+    vector<wstring> m_cmd_open_files;   // 来自命令行/copy_data的待打开文件队列
 
-    CDC* m_pUiDC;				//当前窗口的DC
+    CDC* m_pUiDC;               //当前窗口的DC
     std::vector<std::shared_ptr<CPlayerUIBase>> m_ui_list;      //保存每个界面类的指针
     IPlayerUI* m_pUI = nullptr; //指向当前显示的界面类
 
-    bool m_first_start{ true };		//初始时为true，在定时器第一次启动后置为flase
+    bool m_first_start{ true };     //初始时为true，在定时器第一次启动后置为flase
 
-    int m_window_width;		//窗口的宽度
-    int m_window_height;	//窗口的高度
+    int m_window_width;     //窗口的宽度
+    int m_window_height;    //窗口的高度
     CPoint m_desktop_lyric_pos{ -1, -1 };     //桌面歌词窗口的位置
     CSize m_desktop_lyric_size{ 0, 0 };
-    int m_medialib_btn_width{ theApp.DPI(70) };
+    int m_part_static_width{ theApp.DPI(32) };              // 这里的值是最小宽度，窗口init时会根据文字变大
+    int m_medialib_btn_width{ theApp.DPI(64) };             // 这里的值是最小宽度，窗口init时会根据文字变大
 
-    SLayoutData m_layout;		//窗口布局的固定数据
+    SLayoutData m_layout;       //窗口布局的固定数据
 
-    bool m_searched;		//播放列表是否处于搜索状态
+    bool m_searched;        //播放列表是否处于搜索状态
 
     unsigned int m_timer_count{};
+    unsigned int m_one_sec_timer_counter{};
 
-
-    int m_item_selected{ -1 };		//播放列表中鼠标选中的项目
+    int m_item_selected{ -1 };      //播放列表中鼠标选中的项目
     vector<int> m_items_selected;
-    int m_tab_selected{};		//选项设置中选择的标签
+    int m_tab_selected{};       //选项设置中选择的标签
 
-    CMiniModeDlg m_miniModeDlg{ m_item_selected, m_items_selected };		//迷你模式对话框
+    CMiniModeDlg m_miniModeDlg{ m_item_selected, m_items_selected };        //迷你模式对话框
 
-    CCortanaLyric m_cortana_lyric;		//用于显示Cortana歌词
-    CDesktopLyric m_desktop_lyric;		//桌面歌词
+    CCortanaLyric m_cortana_lyric;      //用于显示Cortana歌词
+    CDesktopLyric m_desktop_lyric;      //桌面歌词
 
-    CLyricEditDlg* m_pLyricEdit;		//歌词编辑对话框（非模态对话框）
-    CLyricBatchDownloadDlg* m_pLyricBatchDownDlg;	//歌词批量下载对话框（非模态对话框）
-    CMediaLibDlg* m_pMediaLibDlg;		//媒体库对话框（非模态对话框）
-    CSoundEffectDlg* m_pSoundEffecDlg;		//音效设定对话框（非模态对话框）
-    CFormatConvertDlg* m_pFormatConvertDlg;		//格式转换对话框（非模态对话框）
-    CFloatPlaylistDlg* m_pFloatPlaylistDlg;		//浮动播放列表对话框
-    CPoint m_float_playlist_pos;				//浮动播放列表的位置
+    CLyricEditDlg* m_pLyricEdit;        //歌词编辑对话框（非模态对话框）
+    CLyricBatchDownloadDlg* m_pLyricBatchDownDlg;   //歌词批量下载对话框（非模态对话框）
+    CMediaLibDlg* m_pMediaLibDlg;       //媒体库对话框（非模态对话框）
+    CSoundEffectDlg* m_pSoundEffecDlg;      //音效设定对话框（非模态对话框）
+    CFormatConvertDlg* m_pFormatConvertDlg;     //格式转换对话框（非模态对话框）
+    CFloatPlaylistDlg* m_pFloatPlaylistDlg;     //浮动播放列表对话框
+    CPoint m_float_playlist_pos{ INT_MAX, INT_MAX };                //浮动播放列表的位置
 
-    CWinThread* m_pThread;		//执行在线查看的线程
-    static UINT ViewOnlineThreadFunc(LPVOID lpParam);	//执行在线查看的线程函数
+    CWinThread* m_pThread;      //执行在线查看的线程
+    static UINT ViewOnlineThreadFunc(LPVOID lpParam);   //执行在线查看的线程函数
 
-    CWinThread* m_pDownloadThread;		//执行自动下载歌词和专辑封面的线程
-    static UINT DownloadLyricAndCoverThreadFunc(LPVOID lpParam);	//执行自动下载歌词和专辑封面的线程函数
+    CWinThread* m_pDownloadThread;      //执行自动下载歌词和专辑封面的线程
+    static UINT DownloadLyricAndCoverThreadFunc(LPVOID lpParam);    //执行自动下载歌词和专辑封面的线程函数
 
     CWinThread* m_uiThread;         //主界面绘图的线程
     static UINT UiThreadFunc(LPVOID lpParam);   //主界面绘图的线程函数
@@ -142,17 +166,18 @@ protected:
     };
     UIThreadPara m_ui_thread_para{};
 
-    int m_play_error_cnt{};		//统计播放出错的次数
+    int m_play_error_cnt{};     //统计播放出错的次数
     int m_fps_cnt{};            //用于统计当前帧率
 
     CNotifyIcon m_notify_icon;
-    CPlayerToolBar m_playlist_toolbar;
 
-    bool m_no_lbtnup{ false };      //当它为true时，不响应WM_LBUTTONUP消息
-    bool m_ignore_color_change{ false };    //当它为true时，不响应颜色变化，防止短时间内重复收到主题颜色变化的消息
-    enum { DELAY_TIMER_ID = 1200, INGORE_COLOR_CHANGE_TIMER_ID = 1201 };
+    bool m_theme_color_changed{ false };
+    std::atomic<int> m_ui_refresh_interval{};    //界面实际刷新时间（毫秒）
 
     CDevicesManager* devicesManager;
+
+    static DEVICE_NOTIFY_CALLBACK_ROUTINE DeviceNotifyCallbackRoutine;
+    HPOWERNOTIFY RegistrationHandle;
 
     // 来自https://www.jianshu.com/p/9d4b68cdbd99
     struct Monitors
@@ -176,15 +201,18 @@ protected:
         }
     };
 
+    CProcessMsgHelper m_process_msg_helper;
+
 private:
-    void SaveConfig();		//保存设置到ini文件
-    void LoadConfig();		//从ini文件读取设置
-    void SetTransparency();			//根据m_transparency的值设置窗口透明度
+    void SaveConfig();      //保存设置到ini文件
+    void LoadConfig();      //从ini文件读取设置
+    void SetTransparency();         //根据m_transparency的值设置窗口透明度
     void SetDesptopLyricTransparency();
-    void DrawInfo(bool reset = false);		//绘制信息
-    void SetPlaylistSize(int cx, int cy);		//设置播放列表的大小
-    void SetDrawAreaSize(int cx, int cy);
+    void DrawInfo(bool reset = false);      //绘制信息
+    void SetPlaylistSize(int cx, int cy, int playlist_width);       //设置播放列表的大小
+    void SetDrawAreaSize(int cx, int cy, int playlist_width);
     void SetAlwaysOnTop();
+    void AdjustVolume(int step);
 
     bool IsMainWindowPopupMenu() const;      //当前弹出的右键是主窗口右键菜单还是播放列表右键菜单
 
@@ -193,29 +221,61 @@ private:
 public:
     void ShowPlayList(bool highlight_visible = true);
     void SetMenuState(CMenu* pMenu);
+    void SetPlaylistSelected(const vector<int>& indexes);
+    void SetUiPlaylistSelected(int index);
+
+    static bool IsPointValid(CPoint);
+    int UpdatePlaylistCtrlPosition(CWnd* pParent, CWnd* pStatic, CWnd* pEdit);     //更新播放列表上方的CStatic和CEdit控件的大小和位置，返回CStatic的宽度
+    int GetPathStaticWidth() const { return m_part_static_width; }
 
 protected:
     void SetPlayListColor(bool highlight_visible = true);
-    void SwitchTrack();		//当切换正在播放的歌曲时的处理
+    void SwitchTrack();     //当切换正在播放的歌曲时的处理
+    void UpdateSongInfoToolTip();
     void SetPlaylistVisible();
     void SetMenubarVisible();
 
-    void UpdateTaskBarProgress();	//更新任务栏按钮上的进度
-    void UpdatePlayPauseButton();		//根据当前播放状态更新“播放/暂停”按钮上的文字和图标
-    void SetThumbnailClipArea();		//设置任务栏缩略图的区域
-    void SetThumbnailClipArea(CRect rect);		//设置任务栏缩略图的区域
-    void EnablePlaylist(bool enable);		//设置启用或禁用播放列表控件
+    // 初始化程序任务栏信息，窗口创建后以及窗口SW_HIDE后恢复时调用
+    void TaskBarInit();
 
-    void CreateDesktopShortcut();		//用于在提示用户创建桌面快捷方式
+    // 更新任务栏按钮上的播放进度与进度指示的颜色，平时由主定时器调用以保持进度更新
+    void UpdateTaskBarProgress(bool force = false) const;
+    // 根据当前播放状态更新“播放/暂停”按钮上的文字和图标（以及任务栏图标角标&按钮状态）
+    void UpdatePlayPauseButton();
+    // 设置任务栏缩略图的区域
+    void TaskBarSetClipArea(CRect rect);
 
-    void ApplySettings(const COptionsDlg& optionDlg);		//从选项设置对话框获取设置
-    void ApplyThemeColor();			//应用主题颜色设置
+    void EnablePlaylist(bool enable);       //设置启用或禁用播放列表控件
+
+    void FirstRunCreateShortcut();            // 如果是首次运行那么提示用户是否创建桌面快捷方式
+
+    void ApplySettings(const COptionsDlg& optionDlg);       //从选项设置对话框获取设置
+
+public:
+    void SettingsChanged();     //当选项设置更改时调用
+
+    //应用歌词设置
+    void ApplyLyricsSettings(const LyricSettingData& lyrics_data, bool lyrics_font_changed = false, bool search_box_font_changed = false);
+    //应用外观设置
+    void ApplyApperanceSettings(const ApperanceSettingData& apperence_data);
+    //启用常规设置
+    void ApplyGeneralSettings(const GeneralSettingData& general_data, bool auto_run_changed = false, bool auto_run = false);
+    //应用播放设置
+    void ApplyPlaySettings(const PlaySettingData& play_data);
+    //应用媒体库设置
+    void ApplyMediaLibSettings(const MediaLibSettingData& media_lib_data);
+
+protected:
+    void ApplyThemeColor();         //应用主题颜色设置
 
     void ThemeColorChanged();
 
 
     void ShowFloatPlaylist();
     void HideFloatPlaylist();
+
+    void ShowHidePlaylist();
+    void ShowHideFloatPlaylist();
 
     void GetPlaylistItemSelected(int cur_index);
     void GetPlaylistItemSelected();
@@ -226,7 +286,7 @@ protected:
 
     void _OnOptionSettings(CWnd* pParent);
 
-    void DoLyricsAutoSave(bool no_inquiry = false);		//保存未修改的歌词，如果no_inquiry为true，则不弹出提示信息
+    void DoLyricsAutoSave(bool no_inquiry = false);     //保存未修改的歌词，如果no_inquiry为true，则不弹出提示信息
     void UpdateABRepeatToolTip();
 
     void LoadDefaultBackground();
@@ -238,6 +298,14 @@ protected:
     void GetScreenInfo();
     void MoveDesktopLyricWindowPos();
 
+    bool IsFloatPlaylistExist();
+    bool MoveFloatPlaylistPos();
+
+    void SaveUiData();
+    void LoadUiData();
+
+    static void OnSplitterChanged(CRect splitter_rect);
+
     // 生成的消息映射函数
     virtual BOOL OnInitDialog();
     afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
@@ -245,15 +313,17 @@ protected:
     afx_msg HCURSOR OnQueryDragIcon();
     DECLARE_MESSAGE_MAP()
 
-    afx_msg void OnSize(UINT nType, int cx, int cy);
+        afx_msg void OnSize(UINT nType, int cx, int cy);
     afx_msg void OnTimer(UINT_PTR nIDEvent);
     afx_msg void OnPlayPause();
+    afx_msg void OnPlay();
+    afx_msg void OnPause();
     afx_msg void OnStop();
     afx_msg void OnPrevious();
     afx_msg void OnNext();
     afx_msg void OnRew();
     afx_msg void OnFF();
-    afx_msg void OnSetPath();
+    afx_msg void OnMediaLib();
     afx_msg void OnFind();
     afx_msg void OnExplorePath();
     virtual BOOL PreTranslateMessage(MSG* pMsg);
@@ -261,8 +331,11 @@ protected:
     afx_msg void OnAppAbout();
     afx_msg void OnFileOpen();
     afx_msg void OnFileOpenFolder();
+public:
     afx_msg void OnDropFiles(HDROP hDropInfo);
+protected:
     afx_msg void OnInitMenu(CMenu* pMenu);
+    afx_msg void OnRepeatMode();
     afx_msg void OnPlayOrder();
     afx_msg void OnPlayShuffle();
     afx_msg void OnLoopPlaylist();
@@ -279,17 +352,20 @@ protected:
     afx_msg void OnPlayItem();
     afx_msg void OnItemProperty();
     //afx_msg void OnRemoveFromPlaylist();
-//	afx_msg void OnClearPlaylist();
+//  afx_msg void OnClearPlaylist();
     afx_msg void OnExploreTrack();
     virtual BOOL OnCommand(WPARAM wParam, LPARAM lParam);
     afx_msg void OnHotKey(UINT nHotKeyId, UINT nKey1, UINT nKey2);
     //afx_msg void OnStnClickedProgressStatic();
     afx_msg void OnReIniBass();
     afx_msg void OnSortByFile();
+    afx_msg void OnSortByPath();
     afx_msg void OnSortByTitle();
     afx_msg void OnSortByArtist();
     afx_msg void OnSortByAlbum();
     afx_msg void OnSortByTrack();
+    afx_msg void OnSortByListenTime();
+    afx_msg void OnSortByModifiedTime();
 public:
     afx_msg void OnDeleteFromDisk();
 protected:
@@ -300,11 +376,7 @@ public:
     afx_msg void OnDispArtistTitle();
     afx_msg void OnDispTitleArtist();
     afx_msg void OnMiniMode();
-    afx_msg void OnBnClickedStop();
-    afx_msg void OnBnClickedPrevious();
-    afx_msg void OnBnClickedPlayPause();
-    afx_msg void OnBnClickedNext();
-    //	afx_msg void OnMove(int x, int y);
+
     afx_msg void OnReloadLyric();
     afx_msg void OnSongInfo();
     afx_msg void OnCopyCurrentLyric();
@@ -323,7 +395,7 @@ public:
     afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
 protected:
     afx_msg LRESULT OnPlaylistIniComplate(WPARAM wParam, LPARAM lParam);
-    afx_msg LRESULT OnSetTitle(WPARAM wParam, LPARAM lParam);
+    afx_msg LRESULT OnAfterSetTrack(WPARAM wParam, LPARAM lParam);
 public:
     afx_msg void OnEqualizer();
     afx_msg void OnExploreOnline();
@@ -335,7 +407,6 @@ public:
     afx_msg void OnTranslateToTranditionalChinese();
     afx_msg void OnAlbumCoverSaveAs();
 protected:
-    afx_msg LRESULT OnPathSelected(WPARAM wParam, LPARAM lParam);
     afx_msg LRESULT OnConnotPlayWarning(WPARAM wParam, LPARAM lParam);
 public:
     afx_msg void OnEnChangeSearchEdit();
@@ -349,16 +420,10 @@ public:
     afx_msg void OnDeleteAlbumCover();
     afx_msg void OnCopyFileTo();
     afx_msg void OnMoveFileTo();
-protected:
-    //afx_msg LRESULT OnOpenFileCommandLine(WPARAM wParam, LPARAM lParam);
-public:
     afx_msg void OnFormatConvert();
     afx_msg void OnFormatConvert1();
 protected:
     afx_msg LRESULT OnSettingsApplied(WPARAM wParam, LPARAM lParam);
-public:
-    afx_msg void OnRecorder();
-protected:
     afx_msg LRESULT OnAlbumCoverDownloadComplete(WPARAM wParam, LPARAM lParam);
 public:
     afx_msg void OnColorizationColorChanged(DWORD dwColorizationColor, BOOL bOpacity);
@@ -391,10 +456,6 @@ public:
     afx_msg void OnDockedPlaylist();
     afx_msg void OnFloatedPlaylist();
     afx_msg LRESULT OnFloatPlaylistClosed(WPARAM wParam, LPARAM lParam);
-    //    afx_msg void OnFileOpenPalylist();
-protected:
-    afx_msg LRESULT OnPlaylistSelected(WPARAM wParam, LPARAM lParam);
-public:
     afx_msg void OnPlaylistAddFile();
     afx_msg void OnRemoveFromPlaylist();
     afx_msg void OnEmptyPlaylist();
@@ -430,6 +491,9 @@ public:
     afx_msg void OnSpeedUp();
     afx_msg void OnSlowDown();
     afx_msg void OnOriginalSpeed();
+    afx_msg void OnPitchUp();
+    afx_msg void OnPitchDown();
+    afx_msg void OnOriginalPitch();
 protected:
     afx_msg LRESULT OnSearchEditBtnClicked(WPARAM wParam, LPARAM lParam);
     afx_msg LRESULT OnInitAddToMenu(WPARAM wParam, LPARAM lParam);
@@ -463,15 +527,10 @@ public:
 protected:
     afx_msg LRESULT OnMainWindowActivated(WPARAM wParam, LPARAM lParam);
 public:
-    afx_msg void OnSortByModifiedTime();
-    afx_msg void OnSortByPath();
     afx_msg void OnContainSubFolder();
 protected:
     afx_msg LRESULT OnGetMusicCurrentPosition(WPARAM wParam, LPARAM lParam);
 public:
-    afx_msg void OnAccendingOrder();
-    afx_msg void OnDesendingOrder();
-    afx_msg void OnInvertPlaylist();
     afx_msg void OnPlayRandom();
 protected:
     afx_msg LRESULT OnCurrentFileAlbumCoverChanged(WPARAM wParam, LPARAM lParam);
@@ -488,8 +547,9 @@ public:
     afx_msg void OnViewAlbum();
     afx_msg void OnLocateToCurrent();
     afx_msg void OnUseStandardTitleBar();
+    void ApplyShowStandardTitlebar();
 protected:
-    afx_msg LRESULT OnDefaultMultimediaDeviceChanged(WPARAM wParam, LPARAM lParam);
+    afx_msg LRESULT OnReInitBassContinuePlay(WPARAM wParam, LPARAM lParam);
     afx_msg LRESULT OnDisplaychange(WPARAM wParam, LPARAM lParam);
 public:
     afx_msg void OnWindowPosChanging(WINDOWPOS* lpwndpos);
@@ -501,6 +561,20 @@ protected:
 public:
     afx_msg void OnPlaylistOptions();
     afx_msg void OnMove(int x, int y);
+
 protected:
-    afx_msg LRESULT OnRecentFolserOrPlaylistChanged(WPARAM wParam, LPARAM lParam);
+    afx_msg LRESULT OnRecentFolderOrPlaylistChanged(WPARAM wParam, LPARAM lParam);
+public:
+    afx_msg void OnPlayAsNext();
+    afx_msg void OnPlaylistFixPathError();
+    afx_msg UINT OnPowerBroadcast(UINT nPowerEvent, LPARAM nEventData);
+protected:
+    afx_msg LRESULT OnSetUiForceFreshFlag(WPARAM wParam, LPARAM lParam);
+    afx_msg void OnMoreRecentItems();
+public:
+    afx_msg void OnNcCalcSize(BOOL bCalcValidRects, NCCALCSIZE_PARAMS* lpncsp);
+protected:
+    afx_msg LRESULT OnClearUiSerchBox(WPARAM wParam, LPARAM lParam);
+public:
+    afx_msg BOOL OnNcActivate(BOOL bActive);
 };

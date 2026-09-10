@@ -7,9 +7,12 @@
 #include "IniHelper.h"
 #include "MusicPlayerCmdHelper.h"
 #include "MessageDlg.h"
-#include "PropertyDlgHelper.h"
+#include "TagSelBaseDlg.h"
 #include "TagLibHelper.h"
 #include "Player.h"
+#include "CueFile.h"
+#include "MusicPlayer2.h"
+//#include "WildcardMap.h"
 
 CTest::CTest()
 {
@@ -31,12 +34,12 @@ void CTest::Test()
     //TestMediaLib();
     //TestAudioTag();
 
-    //Time time(1000, 64, 1024);
+    //CPlayTime time(1000, 64, 1024);
 
     //int a = sizeof(wstring);
 
     //CString info;
-    //info.Format(_T("sizeof(SongInfo)=%d\nsizeof(Time)=%d"), sizeof(SongInfo), sizeof(Time));
+    //info.Format(_T("sizeof(SongInfo)=%d\nsizeof(CPlayTime)=%d"), sizeof(SongInfo), sizeof(CPlayTime));
     //AfxMessageBox(info);
 
     //TestImageResize();
@@ -47,7 +50,13 @@ void CTest::Test()
     //int size = sizeof(SongInfo);
     //MessageBox(theApp.m_pMainWnd->GetSafeHwnd(), std::to_wstring(size).c_str(), NULL, MB_OK);
 
-    TestRating();
+    //TestRating();
+
+    //TestCueSave();
+    //TestFilePathHelper();
+    //TestStringToInt();
+    //TestChinesePingyinMatch();
+    TextStringMatchWildcard();
 }
 
 void CTest::TestStringMatch()
@@ -145,7 +154,7 @@ void CTest::TestCommon()
 void CTest::TestOSUFile()
 {
     COSUFile osu_file{ L"D:\\Program Files\\osu!\\Songs\\66385 u's - Snow halation\\u's - Snow halation (blissfulyoshi) [Insane].osu" };
-    wstring file_name = osu_file.GetAudioFile();
+    wstring file_name = osu_file.GetAudioFileName();
     int a = 0;
 
 }
@@ -162,7 +171,7 @@ void CTest::TestReg()
 
 void CTest::TestMediaLib()
 {
-    CMediaClassifier media_lib(CMediaClassifier::CT_TYPE);
+    CMediaClassifier media_lib(ListItem::ClassificationType::CT_TYPE);
     media_lib.ClassifyMedia();
     int a = 0;
 }
@@ -197,28 +206,13 @@ void CTest::TestImageResize()
 void CTest::TestCrashDlg()
 {
     //显示错误信息对话框
-    CMessageDlg dlg;
-    dlg.SetWindowTitle(CCommon::LoadText(IDS_ERROR1));
-    dlg.SetInfoText(CCommon::LoadText(IDS_ERROR_MESSAGE));
-
-    CString info = CCommon::LoadTextFormat(IDS_CRASH_INFO, {});
-    info += _T("\r\n");
-    info += theApp.GetSystemInfoString();
-    dlg.SetMessageText(info);
-
-    //设置图标
-    HICON hIcon;
-    HRESULT hr = LoadIconMetric(NULL, IDI_ERROR, LIM_LARGE, &hIcon);
-    if (SUCCEEDED(hr))
-        dlg.SetMessageIcon(hIcon);
-
-    dlg.DoModal();
+    // 待重写(做独立的crash对话框)
 }
 
 void CTest::TestTagParse()
 {
     SongInfo song;
-    CPropertyDlgHelper::GetTagFromFileName(L"666-744FFFF23", FORMULAR_YEAR L"-" FORMULAR_ARTIST L"FFFF" FORMULAR_TITLE, song);
+    CTagSelBaseDlg::GetTagFromFileName(CTagSelBaseDlg::FORMULAR_YEAR + L"-" + CTagSelBaseDlg::FORMULAR_ARTIST + L"FFFF" + CTagSelBaseDlg::FORMULAR_TITLE, L"666-744FFFF23", song);
 
     int a = 0;
 }
@@ -235,4 +229,65 @@ void CTest::TestRating()
     int rate = CTagLibHelper::GetMepgRating(CPlayer::GetInstance().GetCurrentSongInfo().file_path);
     //CTagLibHelper::WriteMpegRating(CPlayer::GetInstance().GetCurrentSongInfo().file_path, 2);
     int a = 0;
+}
+
+void CTest::TestCueSave()
+{
+    CCueFile cue_file(L"C:\\Temp\\cue_test\\1979.cue");
+    cue_file.Save(L"C:\\Temp\\cue_test\\1979_1.cue");
+}
+
+void CTest::TestFilePathHelper()
+{
+    CFilePathHelper helper(L"C:\\abc.d\\efg");
+    wstring file_name = helper.GetFileName();
+    wstring file_extension = helper.GetFileExtension();
+    wstring file_name_whthout_extension = helper.GetFileNameWithoutExtension();
+    wstring file_dir = helper.GetDir();
+    wstring folder_name = helper.GetFolderName();
+    ASSERT(file_name == L"efg");
+    ASSERT(file_extension.empty());
+    ASSERT(file_name_whthout_extension == L"efg");
+    ASSERT(file_dir == L"C:\\abc.d\\");
+    ASSERT(folder_name == L"abc.d");
+}
+
+void CTest::TestStringToInt()
+{
+    wstring str1 = L"abc0234ttyyhh";
+    int n1 = CCommon::StringToInt(str1);
+    ASSERT(n1 == 234);
+    wstring str2 = L"abc056";
+    int n2 = CCommon::StringToInt(str2);
+    ASSERT(n2 == 56);
+    wstring str3 = L"876rrtyhfg345hg";
+    int n3 = CCommon::StringToInt(str3);
+    ASSERT(n3 == 876);
+    wstring str4 = L"sdfoeoirglksf6";
+    int n4 = CCommon::StringToInt(str4);
+    ASSERT(n4 == 6);
+}
+
+void CTest::TestChinesePingyinMatch()
+{
+    ASSERT(theApp.m_chinese_pingyin_res.IsStringMatchWithPingyin(L"nh", L"你好世界"));
+    ASSERT(theApp.m_chinese_pingyin_res.IsStringMatchWithPingyin(L"nhsj", L"你好世界"));
+    ASSERT(theApp.m_chinese_pingyin_res.IsStringMatchWithPingyin(L"nihaoshijie", L"你好世界"));
+    ASSERT(!theApp.m_chinese_pingyin_res.IsStringMatchWithPingyin(L"nh", L"你世界"));
+    ASSERT(theApp.m_chinese_pingyin_res.IsStringMatchWithPingyin(L"cxqd", L"春夏秋冬"));
+}
+
+void CTest::TextStringMatchWildcard()
+{
+    //CWildcardMap<std::vector<std::wstring>> my_map;
+    //my_map[L"text|12|file"].push_back(L"text1");
+    //ASSERT(my_map.size() == 1);
+    //my_map[L"text|*|file"].push_back(L"text2");
+    //ASSERT(my_map.size() == 1);
+    //my_map[L"text|*|*"].push_back(L"text3");
+    //ASSERT(my_map.size() == 1);
+    //my_map[L"text|*|file2"].push_back(L"text4");
+    //ASSERT(my_map.size() == 2);
+    //my_map[L"text|12|file2"].push_back(L"text5");
+    //ASSERT(my_map.size() == 2);
 }
